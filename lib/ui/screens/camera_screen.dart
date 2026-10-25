@@ -216,7 +216,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             onPressed: () => setState(() => _isBatchMode = !_isBatchMode),
             child: Text(
               _isBatchMode ? 'Single' : 'Batch',
-              style: const TextStyle(color: const Color(0xFF00E5FF), fontWeight: FontWeight.bold),
+              style: const TextStyle(color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -283,7 +283,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     child: Container(
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFF00E5FF),
+                        color: Color(0xFF00E5FF),
                       ),
                       child: _isCapturing
                           ? const Center(child: CircularProgressIndicator(strokeWidth: 3, color: Colors.black))

@@ -97,6 +97,36 @@ Notice of termination must be provided 30 days in advance.
       );
       expect(q3, contains('Contract Agreement'));
     });
+
+    test('Gemma extracts structured line items from invoice tables', () async {
+      const sampleTabularInvoice = '''
+TechFlow Cloud Corp
+Invoice: #TF-2026-102
+Date: 2026-10-25
+Item 1: Ultra High-Speed Neural NPU Server x 2 @ \$1,200.00 = \$2,400.00
+Item 2: On-Device Gemma Optimization License x 1 @ \$650.00 = \$650.00
+Tax ID: US-EIN-9928192
+IBAN: US82WXYZ1234567890123456
+Subtotal: \$3,050.00
+Tax: \$250.00
+Total Amount: \$3,300.00
+''';
+
+      final analysis = await gemma.analyzeDocument(sampleTabularInvoice);
+
+      expect(analysis.lineItems.length, equals(2));
+      expect(analysis.lineItems[0].description, contains('Neural NPU Server'));
+      expect(analysis.lineItems[0].quantity, equals(2));
+      expect(analysis.lineItems[0].unitPrice, equals('\$1,200.00'));
+      expect(analysis.lineItems[0].totalPrice, equals('\$2,400.00'));
+
+      // Check IBAN & Tax ID extracted
+      final ibanField = analysis.extractedFields.firstWhere((f) => f.key == 'IBAN / Account');
+      expect(ibanField.value, equals('US82WXYZ1234567890123456'));
+
+      final taxField = analysis.extractedFields.firstWhere((f) => f.key == 'Tax / VAT ID');
+      expect(taxField.value, equals('US-EIN-9928192'));
+    });
   });
 }
 

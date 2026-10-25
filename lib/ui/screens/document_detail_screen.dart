@@ -27,28 +27,33 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   }
 
   Future<void> _renameDocument() async {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
     final controller = TextEditingController(text: _doc.title);
+
     final newTitle = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF131B2E),
+        backgroundColor: theme.colorScheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Rename Document', style: TextStyle(color: Colors.white)),
+        title: Text(
+          'Rename Document',
+          style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(labelText: 'Document Title'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.6))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00E5FF),
-              foregroundColor: const Color(0xFF050C1A),
+              backgroundColor: primaryColor,
+              foregroundColor: theme.colorScheme.onPrimary,
             ),
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -93,19 +98,29 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   }
 
   Future<void> _deleteDocument() async {
+    final theme = Theme.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF131B2E),
+        backgroundColor: theme.colorScheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Document?'),
-        content: const Text('This will permanently delete this document and all its scanned pages from local storage.'),
+        title: Text(
+          'Delete Document?',
+          style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'This will permanently delete this document and all its scanned pages from local storage.',
+          style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.7)),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.6))),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -119,14 +134,18 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final bool isWideScreen = constraints.maxWidth >= 900;
 
         return Scaffold(
-          backgroundColor: const Color(0xFF0B0F19),
+          backgroundColor: theme.scaffoldBackgroundColor,
           appBar: AppBar(
-            backgroundColor: const Color(0xFF131B2E),
+            backgroundColor: theme.colorScheme.surface,
+            elevation: 0,
             title: InkWell(
               onTap: _renameDocument,
               borderRadius: BorderRadius.circular(8),
@@ -135,9 +154,15 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Flexible(child: Text(_doc.title, overflow: TextOverflow.ellipsis)),
+                    Flexible(
+                      child: Text(
+                        _doc.title,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
+                      ),
+                    ),
                     const SizedBox(width: 6),
-                    const Icon(Icons.edit, size: 15, color: Color(0xFF00E5FF)),
+                    Icon(Icons.edit, size: 15, color: primaryColor),
                   ],
                 ),
               ),
@@ -145,7 +170,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
             actions: [
               if (!isWideScreen)
                 IconButton(
-                  icon: const Icon(Icons.psychology, color: Color(0xFF00E5FF)),
+                  icon: Icon(Icons.psychology, color: primaryColor),
                   tooltip: 'Gemma Local AI Insights',
                   onPressed: () {
                     Navigator.push(
@@ -158,48 +183,68 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                 ),
               IconButton(
                 icon: _isGeneratingPdf
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF)))
-                    : const Icon(Icons.share_outlined, color: Colors.white70),
+                    ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor))
+                    : Icon(Icons.share_outlined, color: theme.colorScheme.onSurface.withOpacity(0.8)),
                 tooltip: 'Export & Share PDF',
                 onPressed: _isGeneratingPdf ? null : _exportPdf,
               ),
               PopupMenuButton<String>(
-                iconColor: Colors.white70,
-                color: const Color(0xFF131B2E),
+                iconColor: theme.colorScheme.onSurface.withOpacity(0.8),
+                color: theme.colorScheme.surface,
                 onSelected: (val) {
                   if (val == 'delete') _deleteDocument();
                   if (val == 'rename') _renameDocument();
                 },
                 itemBuilder: (context) => [
-                  const PopupMenuItem(value: 'rename', child: Text('Rename')),
-                  const PopupMenuItem(value: 'delete', child: Text('Delete Document', style: TextStyle(color: Colors.redAccent))),
+                  PopupMenuItem(
+                    value: 'rename',
+                    child: Text('Rename', style: TextStyle(color: theme.colorScheme.onSurface)),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete Document', style: TextStyle(color: Colors.redAccent)),
+                  ),
                 ],
               ),
             ],
           ),
           body: _doc.pages.isEmpty
-              ? const Center(child: Text('No pages in this document', style: TextStyle(color: Colors.white54)))
+              ? Center(
+                  child: Text(
+                    'No pages in this document',
+                    style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                  ),
+                )
               : isWideScreen
-                  ? _buildWideScreenLayout()
-                  : _buildMobileLayout(),
+                  ? _buildWideScreenLayout(theme, primaryColor)
+                  : _buildMobileLayout(theme, primaryColor),
         );
       },
     );
   }
 
-  Widget _buildMobileLayout() {
+  Widget _buildMobileLayout(ThemeData theme, Color primaryColor) {
     return Column(
       children: [
         // Top Page Counter & AI Banner
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: const Color(0xFF131B2E),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+            ),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Page ${_currentPageIndex + 1} of ${_doc.pageCount}',
-                style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13),
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
               ),
               InkWell(
                 onTap: () {
@@ -213,16 +258,19 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00E5FF).withOpacity(0.12),
+                    color: primaryColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
+                    border: Border.all(color: primaryColor.withOpacity(0.4)),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.auto_awesome, color: Color(0xFF00E5FF), size: 14),
-                      SizedBox(width: 4),
-                      Text('Gemma Intelligence', style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11, fontWeight: FontWeight.bold)),
+                      Icon(Icons.auto_awesome, color: primaryColor, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Gemma Intelligence',
+                        style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
                     ],
                   ),
                 ),
@@ -256,70 +304,86 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         // Bottom Page Control Bar
         Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          color: const Color(0xFF131B2E),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              TextButton.icon(
-                onPressed: _reCropCurrentPage,
-                icon: const Icon(Icons.crop, color: Color(0xFF00E5FF)),
-                label: const Text('Re-Crop', style: TextStyle(color: Color(0xFF00E5FF))),
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0066FF),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              top: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                TextButton.icon(
+                  onPressed: _reCropCurrentPage,
+                  icon: Icon(Icons.crop, color: primaryColor),
+                  label: Text('Re-Crop', style: TextStyle(color: primaryColor)),
                 ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => GemmaInsightsScreen(document: _doc),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.psychology, size: 18),
-                label: const Text('Gemma AI'),
-              ),
-              TextButton.icon(
-                onPressed: _exportPdf,
-                icon: const Icon(Icons.picture_as_pdf_outlined, color: Color(0xFF00E5FF)),
-                label: const Text('Export PDF', style: TextStyle(color: Color(0xFF00E5FF))),
-              ),
-            ],
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: theme.colorScheme.onPrimary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GemmaInsightsScreen(document: _doc),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.psychology, size: 18),
+                  label: const Text('Gemma AI', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                TextButton.icon(
+                  onPressed: _exportPdf,
+                  icon: Icon(Icons.picture_as_pdf_outlined, color: primaryColor),
+                  label: Text('Export PDF', style: TextStyle(color: primaryColor)),
+                ),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildWideScreenLayout() {
+  Widget _buildWideScreenLayout(ThemeData theme, Color primaryColor) {
     return Row(
       children: [
         // Left: Interactive Document Preview
         Expanded(
           flex: 6,
           child: Container(
-            color: const Color(0xFF0B0F19),
+            color: theme.scaffoldBackgroundColor,
             child: Column(
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  color: const Color(0xFF131B2E),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    border: Border(
+                      bottom: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                    ),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'Page ${_currentPageIndex + 1} of ${_doc.pageCount}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white70),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface.withOpacity(0.7),
+                        ),
                       ),
                       Row(
                         children: [
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF00E5FF),
-                              side: const BorderSide(color: Color(0xFF00E5FF)),
+                              foregroundColor: primaryColor,
+                              side: BorderSide(color: primaryColor),
                             ),
                             onPressed: _reCropCurrentPage,
                             icon: const Icon(Icons.crop, size: 16),
@@ -328,8 +392,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                           const SizedBox(width: 10),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00E5FF),
-                              foregroundColor: const Color(0xFF050C1A),
+                              backgroundColor: primaryColor,
+                              foregroundColor: theme.colorScheme.onPrimary,
                             ),
                             onPressed: _exportPdf,
                             icon: const Icon(Icons.picture_as_pdf, size: 16),
@@ -366,7 +430,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         ),
 
         // Vertical Divider
-        Container(width: 1, color: const Color(0xFF1E293B)),
+        Container(width: 1, color: theme.colorScheme.outlineVariant),
 
         // Right Pane: Integrated Gemma AI Insights
         Expanded(

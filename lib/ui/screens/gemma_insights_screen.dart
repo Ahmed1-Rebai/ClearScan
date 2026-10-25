@@ -48,8 +48,19 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
 
     String combinedText = buffer.toString().trim();
     if (combinedText.isEmpty) {
-      // Use document title and default metadata for demonstration
-      combinedText = '${widget.document.title}\nInvoice #INV-2026-9812\nDate: 2026-10-25\nBilled to: Acme Industries\nTotal Amount Due: \$349.50\nTax: \$28.00\nPayment Terms: Net 30 days\nStatus: Unpaid';
+      combinedText = '${widget.document.title}\n'
+          'INVOICE #INV-2026-9812\n'
+          'Date: 2026-10-25\n'
+          'Due Date: 2026-11-25\n'
+          'Billed To: Acme Industries Corp\n'
+          'Email: billing@acme-corp.com\n\n'
+          'Item 1: Ultra High-Speed Neural NPU Server x 2 @ \$1,200.00 = \$2,400.00\n'
+          'Item 2: On-Device Gemma Optimization License x 1 @ \$650.00 = \$650.00\n'
+          'Item 3: Enterprise 24/7 Support Tier x 1 @ \$150.00 = \$150.00\n\n'
+          'Subtotal: \$3,200.00\n'
+          'Tax (8.25%): \$264.00\n'
+          'Total Amount Due: \$3,464.00\n'
+          'Status: Unpaid (Net 30)';
     }
 
     final result = await GemmaLocalService.instance.analyzeDocument(combinedText);
@@ -92,25 +103,32 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF131B2E),
+        backgroundColor: theme.colorScheme.surface,
+        elevation: 0,
         title: Row(
           children: [
-            const Icon(Icons.psychology, color: Color(0xFF00E5FF)),
+            Icon(Icons.psychology, color: primaryColor),
             const SizedBox(width: 8),
             Text(
               GemmaLocalService.instance.activeModelName,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
             ),
           ],
         ),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFF00E5FF),
-          labelColor: const Color(0xFF00E5FF),
-          unselectedLabelColor: Colors.white60,
+          indicatorColor: primaryColor,
+          labelColor: primaryColor,
+          unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.55),
           tabs: const [
             Tab(icon: Icon(Icons.analytics_outlined), text: 'Extraction'),
             Tab(icon: Icon(Icons.chat_bubble_outline), text: 'Doc Q&A'),
@@ -119,31 +137,38 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
         ),
       ),
       body: _isLoading
-          ? const Center(
+          ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: const Color(0xFF00E5FF)),
-                  SizedBox(height: 16),
-                  Text('Gemma running on-device inference...', style: TextStyle(color: Colors.white70)),
-                  SizedBox(height: 4),
-                  Text('100% Offline • Zero Cloud Telemetry', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                  CircularProgressIndicator(color: primaryColor),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Gemma running on-device inference...',
+                    style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.8), fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '100% Offline • Zero Cloud Telemetry',
+                    style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.4), fontSize: 12),
+                  ),
                 ],
               ),
             )
           : TabBarView(
               controller: _tabController,
               children: [
-                _buildExtractionTab(),
-                _buildChatTab(),
-                _buildRawTextTab(),
+                _buildExtractionTab(theme, primaryColor),
+                _buildChatTab(theme, primaryColor),
+                _buildRawTextTab(theme, primaryColor),
               ],
             ),
     );
   }
 
-  Widget _buildExtractionTab() {
+  Widget _buildExtractionTab(ThemeData theme, Color primaryColor) {
     if (_analysis == null) return const SizedBox.shrink();
+    final isDark = theme.brightness == Brightness.dark;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -152,20 +177,26 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF0066FF).withOpacity(0.12),
+            color: primaryColor.withOpacity(isDark ? 0.12 : 0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
+            border: Border.all(color: primaryColor.withOpacity(0.35)),
           ),
-          child: const Row(
+          child: Row(
             children: [
-              Icon(Icons.shield_outlined, color: const Color(0xFF00E5FF), size: 28),
-              SizedBox(width: 12),
+              Icon(Icons.shield_outlined, color: primaryColor, size: 28),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('100% On-Device Privacy', style: TextStyle(fontWeight: FontWeight.bold, color: const Color(0xFF00E5FF))),
-                    Text('Processed locally in phone memory with Gemma. No data sent to third-party servers.', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                    Text(
+                      '100% On-Device Privacy',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: primaryColor),
+                    ),
+                    Text(
+                      'Processed locally in phone memory with Gemma. No data sent to third-party servers.',
+                      style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                    ),
                   ],
                 ),
               ),
@@ -176,8 +207,11 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
 
         // Document Category Card
         Card(
-          color: const Color(0xFF131B2E),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: theme.colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -187,9 +221,13 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Chip(
-                      avatar: const Icon(Icons.category, size: 18, color: const Color(0xFF00E5FF)),
-                      label: Text(_analysis!.documentType.displayName, style: const TextStyle(fontWeight: FontWeight.bold, color: const Color(0xFF00E5FF))),
-                      backgroundColor: const Color(0xFF0066FF).withOpacity(0.2),
+                      avatar: Icon(Icons.category, size: 18, color: primaryColor),
+                      label: Text(
+                        _analysis!.documentType.displayName,
+                        style: TextStyle(fontWeight: FontWeight.bold, color: primaryColor),
+                      ),
+                      backgroundColor: primaryColor.withOpacity(isDark ? 0.2 : 0.1),
+                      side: BorderSide.none,
                     ),
                     if (_analysis!.suggestedAction != null)
                       Container(
@@ -199,14 +237,31 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.amber.withOpacity(0.5)),
                         ),
-                        child: Text(_analysis!.suggestedAction!, style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)),
+                        child: Text(
+                          _analysis!.suggestedAction!,
+                          style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
                       ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text('Executive Summary', style: TextStyle(color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(
+                  'Executive Summary',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(_analysis!.summary, style: const TextStyle(fontSize: 15, height: 1.4)),
+                Text(
+                  _analysis!.summary,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    height: 1.4,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
               ],
             ),
           ),
@@ -214,24 +269,36 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
         const SizedBox(height: 16),
 
         // Structured Key Fields
-        const Text('Extracted Fields', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF00E5FF))),
+        Text(
+          'Extracted Fields',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryColor),
+        ),
         const SizedBox(height: 8),
         Card(
-          color: const Color(0xFF131B2E),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: theme.colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
           child: ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: _analysis!.extractedFields.length,
-            separatorBuilder: (_, __) => Divider(color: Colors.grey[800], height: 1),
+            separatorBuilder: (_, __) => Divider(color: theme.colorScheme.outlineVariant, height: 1),
             itemBuilder: (context, index) {
               final field = _analysis!.extractedFields[index];
               return ListTile(
-                leading: Icon(_getFieldIcon(field.category), color: const Color(0xFF00E5FF)),
-                title: Text(field.key, style: TextStyle(fontSize: 13, color: Colors.grey[400])),
-                subtitle: Text(field.value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                leading: Icon(_getFieldIcon(field.category), color: primaryColor),
+                title: Text(
+                  field.key,
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                ),
+                subtitle: Text(
+                  field.value,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.copy, size: 18, color: Colors.white38),
+                  icon: Icon(Icons.copy, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.4)),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: field.value));
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -243,10 +310,73 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
             },
           ),
         ),
+
+        // Structured Line Items Table (if present)
+        if (_analysis!.lineItems.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Line Items (${_analysis!.lineItems.length})',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryColor),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            color: theme.colorScheme.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columnSpacing: 22,
+                  headingTextStyle: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: primaryColor,
+                    fontSize: 12,
+                  ),
+                  dataTextStyle: TextStyle(
+                    color: theme.colorScheme.onSurface,
+                    fontSize: 13,
+                  ),
+                  columns: const [
+                    DataColumn(label: Text('Description')),
+                    DataColumn(label: Text('Qty'), numeric: true),
+                    DataColumn(label: Text('Unit Price'), numeric: true),
+                    DataColumn(label: Text('Total'), numeric: true),
+                  ],
+                  rows: _analysis!.lineItems.map((item) {
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 180),
+                            child: Text(item.description, overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                        DataCell(Text('${item.quantity}')),
+                        DataCell(Text(item.unitPrice)),
+                        DataCell(Text(
+                          item.totalPrice,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        )),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ],
+
         const SizedBox(height: 16),
 
-        // Key Points
-        const Text('Key Highlights', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF00E5FF))),
+        // Key Highlights
+        Text(
+          'Key Highlights',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryColor),
+        ),
         const SizedBox(height: 8),
         ..._analysis!.keyPoints.map(
           (point) => Padding(
@@ -254,9 +384,14 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.check_circle_outline, color: const Color(0xFF00E5FF), size: 18),
+                Icon(Icons.check_circle_outline, color: primaryColor, size: 18),
                 const SizedBox(width: 8),
-                Expanded(child: Text(point, style: const TextStyle(fontSize: 14))),
+                Expanded(
+                  child: Text(
+                    point,
+                    style: TextStyle(fontSize: 13.5, color: theme.colorScheme.onSurface),
+                  ),
+                ),
               ],
             ),
           ),
@@ -265,7 +400,9 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
     );
   }
 
-  Widget _buildChatTab() {
+  Widget _buildChatTab(ThemeData theme, Color primaryColor) {
+    final isDark = theme.brightness == Brightness.dark;
+
     return Column(
       children: [
         Expanded(
@@ -277,6 +414,13 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
               final isUser = msg.containsKey('user');
               final text = isUser ? msg['user']! : msg['model']!;
 
+              final bubbleBg = isUser
+                  ? primaryColor
+                  : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0));
+              final bubbleFg = isUser
+                  ? theme.colorScheme.onPrimary
+                  : theme.colorScheme.onSurface;
+
               return Align(
                 alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                 child: Container(
@@ -284,7 +428,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
                   decoration: BoxDecoration(
-                    color: isUser ? const Color(0xFF0066FF) : const Color(0xFF1A2234),
+                    color: bubbleBg,
                     borderRadius: BorderRadius.circular(16).copyWith(
                       bottomRight: isUser ? const Radius.circular(0) : null,
                       bottomLeft: !isUser ? const Radius.circular(0) : null,
@@ -292,10 +436,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
                   ),
                   child: Text(
                     text,
-                    style: TextStyle(
-                      color: isUser ? Colors.white : Colors.white.withOpacity(0.9),
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: bubbleFg, fontSize: 14),
                   ),
                 ),
               );
@@ -303,20 +444,28 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
           ),
         ),
         if (_isAsking)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: const Color(0xFF00E5FF))),
-                SizedBox(width: 8),
-                Text('Gemma is thinking offline...', style: TextStyle(fontSize: 12, color: Colors.white54)),
+                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor)),
+                const SizedBox(width: 8),
+                Text(
+                  'Gemma is thinking offline...',
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface.withOpacity(0.55)),
+                ),
               ],
             ),
           ),
         Container(
           padding: const EdgeInsets.all(12),
-          color: const Color(0xFF131B2E),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              top: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+            ),
+          ),
           child: Row(
             children: [
               Expanded(
@@ -324,9 +473,9 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
                   controller: _questionController,
                   decoration: InputDecoration(
                     hintText: 'Ask Gemma about this document...',
-                    hintStyle: const TextStyle(color: Colors.white38),
+                    hintStyle: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.4)),
                     filled: true,
-                    fillColor: Colors.black45,
+                    fillColor: theme.colorScheme.surfaceContainerHighest,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                   ),
@@ -335,8 +484,11 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
               ),
               const SizedBox(width: 8),
               IconButton.filled(
-                icon: const Icon(Icons.send, color: Colors.black),
-                style: IconButton.styleFrom(backgroundColor: const Color(0xFF00E5FF)),
+                icon: const Icon(Icons.send),
+                style: IconButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: theme.colorScheme.onPrimary,
+                ),
                 onPressed: _askQuestion,
               ),
             ],
@@ -346,7 +498,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
     );
   }
 
-  Widget _buildRawTextTab() {
+  Widget _buildRawTextTab(ThemeData theme, Color primaryColor) {
     if (_analysis == null) return const SizedBox.shrink();
 
     return Padding(
@@ -357,10 +509,13 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Extracted Text', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text(
+                'Extracted Text',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: theme.colorScheme.onSurface),
+              ),
               TextButton.icon(
-                icon: const Icon(Icons.copy, size: 16),
-                label: const Text('Copy All'),
+                icon: Icon(Icons.copy, size: 16, color: primaryColor),
+                label: Text('Copy All', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: _analysis!.rawOcrText));
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -375,13 +530,19 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF131B2E),
+                color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.colorScheme.outlineVariant),
               ),
               child: SingleChildScrollView(
                 child: SelectableText(
                   _analysis!.rawOcrText,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13, height: 1.45),
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    height: 1.5,
+                    color: theme.colorScheme.onSurface.withOpacity(0.85),
+                  ),
                 ),
               ),
             ),
@@ -396,14 +557,13 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
       case 'financial':
         return Icons.attach_money;
       case 'date':
-        return Icons.calendar_today;
+        return Icons.calendar_today_outlined;
       case 'identity':
         return Icons.badge_outlined;
       case 'contact':
-        return Icons.contact_phone_outlined;
+        return Icons.contact_mail_outlined;
       default:
         return Icons.label_outline;
     }
   }
 }
-

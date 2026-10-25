@@ -2,9 +2,21 @@ import 'dart:math';
 import 'package:image/image.dart' as img;
 import '../models/document.dart';
 
-/// High-fidelity document enhancement filter engine.
-/// Re-implements CamScanner's signature "Magic Color" along with B&W, Grayscale, and Lighten.
+/// High-performance document enhancement filter engine.
+/// Re-implements CamScanner's signature "Magic Color" with lookup tables (LUTs)
+/// and memory-efficient background illumination mapping.
 class DocumentFilterEngine {
+  // Precomputed 256-element tone curves for instant O(1) pixel processing
+  static final List<double> _magicDarkLut = List.generate(
+    186,
+    (i) => pow(i / 185.0, 1.45).toDouble(),
+  );
+
+  static final List<int> _lightenLut = List.generate(
+    256,
+    (i) => (pow(i / 255.0, 0.72) * 255.0).round().clamp(0, 255),
+  );
+
   /// Applies the requested [filter] to the [input] image.
   static img.Image applyFilter(img.Image input, ScanFilterType filter) {
     switch (filter) {
@@ -23,41 +35,52 @@ class DocumentFilterEngine {
 
   /// CamScanner's Signature "Magic Color" filter:
   /// 1. Background illumination normalization (erases shadows, whitens paper).
-  /// 2. High-pass unsharp mask (sharpens text edges and handwriting).
-  /// 3. Selective color boosting (keeps blue/black ink crisp, preserves red stamps/signatures).
+  /// 2. Text edge crisping and contrast maximization.
+  /// 3. Saturation boost for signatures, stamps, and colored headers.
   static img.Image applyMagicColor(img.Image input) {
     final int w = input.width;
     final int h = input.height;
     final img.Image result = img.Image(width: w, height: h);
 
-    // 1. Generate low-frequency background illumination map via large radius blur
-    final img.Image backgroundMap = img.copyResize(input, width: min(w, 160), height: min(h, 160));
-    final img.Image blurredBg = img.gaussianBlur(backgroundMap, radius: 8);
-    final img.Image fullBg = img.copyResize(blurredBg, width: w, height: h);
+    // 1. Generate small background illumination map (e.g. max 120px) to estimate low-frequency lighting
+    const int bgTargetDim = 120;
+    final int bgW = min(w, bgTargetDim);
+    final int bgH = min(h, (bgTargetDim * (h / w)).round());
+
+    final img.Image backgroundMap = img.copyResize(
+      input,
+      width: bgW,
+      height: bgH,
+      interpolation: img.Interpolation.linear,
+    );
+    final img.Image blurredBg = img.gaussianBlur(backgroundMap, radius: 5);
+
+    final double scaleBgX = bgW / w;
+    final double scaleBgY = bgH / h;
 
     for (int y = 0; y < h; y++) {
+      final int bgY = min((y * scaleBgY).floor(), bgH - 1);
       for (int x = 0; x < w; x++) {
         final img.Pixel orig = input.getPixel(x, y);
-        final img.Pixel bg = fullBg.getPixel(x, y);
+
+        final int bgX = min((x * scaleBgX).floor(), bgW - 1);
+        final img.Pixel bg = blurredBg.getPixel(bgX, bgY);
 
         final double r = orig.r.toDouble();
         final double g = orig.g.toDouble();
         final double b = orig.b.toDouble();
 
-        // Background luminance estimate
+        // Estimated background luminance
         final double bgLum = max(50.0, 0.299 * bg.r + 0.587 * bg.g + 0.114 * bg.b);
 
-        // Normalize illumination: scaled by (255 / bgLum)
+        // Normalize illumination
         final double factor = 255.0 / bgLum;
-        double normR = r * factor;
-        double normG = g * factor;
-        double normB = b * factor;
+        final double normR = r * factor;
+        final double normG = g * factor;
+        final double normB = b * factor;
 
-        // Calculate normalized luminance
-        final double lum = 0.299 * normR + 0.587 * normG + 0.114 * normB;
+        final int lum = (0.299 * normR + 0.587 * normG + 0.114 * normB).round().clamp(0, 255);
 
-        // 2. High-contrast tone curve: push text ink dark, whiten paper
-        // If luminance > 200, smooth blend to pure white
         double finalR, finalG, finalB;
         if (lum > 185) {
           final double t = ((lum - 185) / 70.0).clamp(0.0, 1.0);
@@ -65,19 +88,17 @@ class DocumentFilterEngine {
           finalG = normG + (255.0 - normG) * t;
           finalB = normB + (255.0 - normB) * t;
         } else {
-          // Darken ink / text strokes for maximum readability
-          final double darkFactor = pow(lum / 185.0, 1.45).toDouble();
+          final double darkFactor = _magicDarkLut[lum];
           finalR = normR * darkFactor;
           finalG = normG * darkFactor;
           finalB = normB * darkFactor;
         }
 
-        // 3. Color saturation boost for stamps, signatures, colored text
+        // Color boost for colored ink, stamps, logos
         final double maxC = max(finalR, max(finalG, finalB));
         final double minC = min(finalR, min(finalG, finalB));
         final double chroma = maxC - minC;
         if (chroma > 25) {
-          // Distinct color (e.g. blue pen ink, red seal stamp)
           final double mean = (finalR + finalG + finalB) / 3.0;
           finalR = (mean + (finalR - mean) * 1.35).clamp(0.0, 255.0);
           finalG = (mean + (finalG - mean) * 1.35).clamp(0.0, 255.0);
@@ -105,7 +126,6 @@ class DocumentFilterEngine {
     final img.Image gray = img.grayscale(input);
     final img.Image result = img.Image(width: w, height: h);
 
-    // Compute Otsu global threshold
     final int threshold = _computeOtsuThreshold(gray);
 
     for (int y = 0; y < h; y++) {
@@ -122,7 +142,6 @@ class DocumentFilterEngine {
   /// Multi-tone smooth grayscale document filter.
   static img.Image applyGrayscale(img.Image input) {
     final img.Image gray = img.grayscale(input);
-    // Apply gentle S-curve to increase contrast
     return img.adjustColor(gray, contrast: 1.25, brightness: 1.05);
   }
 
@@ -136,17 +155,12 @@ class DocumentFilterEngine {
       for (int x = 0; x < w; x++) {
         final img.Pixel p = input.getPixel(x, y);
 
-        // Gamma < 1.0 brightens mid-tones and highlights
-        final double r = pow(p.r / 255.0, 0.72) * 255.0;
-        final double g = pow(p.g / 255.0, 0.72) * 255.0;
-        final double b = pow(p.b / 255.0, 0.72) * 255.0;
-
         result.setPixelRgba(
           x,
           y,
-          r.round().clamp(0, 255),
-          g.round().clamp(0, 255),
-          b.round().clamp(0, 255),
+          _lightenLut[p.r.toInt().clamp(0, 255)],
+          _lightenLut[p.g.toInt().clamp(0, 255)],
+          _lightenLut[p.b.toInt().clamp(0, 255)],
           p.a.toInt(),
         );
       }
@@ -195,4 +209,3 @@ class DocumentFilterEngine {
     return threshold;
   }
 }
-

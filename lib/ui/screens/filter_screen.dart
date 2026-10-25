@@ -2,10 +2,10 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
+import '../../core/cv/cv_isolate_service.dart';
 import '../../core/cv/filter_engine.dart';
 import '../../core/models/document.dart';
 import '../../core/storage/document_repository.dart';
-import '../../core/ai/gemma_local_service.dart';
 import 'document_detail_screen.dart';
 
 class FilterScreen extends StatefulWidget {
@@ -52,9 +52,8 @@ class _FilterScreenState extends State<FilterScreen> {
       return;
     }
 
-    // Process filter
-    final filtered = DocumentFilterEngine.applyFilter(_currentImage, filter);
-    final bytes = Uint8List.fromList(img.encodeJpg(filtered, quality: 90));
+    // Process filter and JPEG encoding in a single background isolate call
+    final bytes = await CvIsolateService.applyFilterAndEncodeAsync(_currentImage, filter);
     _filterCache[filter] = bytes;
 
     if (mounted) {
@@ -65,17 +64,19 @@ class _FilterScreenState extends State<FilterScreen> {
     }
   }
 
-  void _rotateImage() {
+  Future<void> _rotateImage() async {
     setState(() => _isProcessing = true);
-    _currentImage = img.copyRotate(_currentImage, angle: 90);
+    final rotated = await CvIsolateService.rotateAsync(_currentImage, 90);
+    _currentImage = rotated;
     _filterCache.clear();
-    _applyFilter(_selectedFilter);
+    await _applyFilter(_selectedFilter);
   }
 
   Future<void> _saveAndFinish() async {
     setState(() => _isProcessing = true);
 
-    final filtered = DocumentFilterEngine.applyFilter(_currentImage, _selectedFilter);
+    // Apply selected filter to full-res image in background isolate
+    final filtered = await CvIsolateService.applyFilterAsync(_currentImage, _selectedFilter);
     final processedPath = await DocumentRepository.instance.saveProcessedPageImage(
       filtered,
       widget.page.id,
@@ -119,22 +120,26 @@ class _FilterScreenState extends State<FilterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Enhance Scan'),
-        backgroundColor: Colors.black87,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.rotate_right),
+            icon: const Icon(Icons.rotate_right_rounded),
             tooltip: 'Rotate 90°',
             onPressed: _isProcessing ? null : _rotateImage,
           ),
           TextButton.icon(
             onPressed: _isProcessing ? null : _saveAndFinish,
-            icon: const Icon(Icons.check, color: const Color(0xFF00E5FF)),
-            label: const Text('Save', style: TextStyle(color: const Color(0xFF00E5FF), fontWeight: FontWeight.bold)),
+            icon: Icon(Icons.check, color: primaryColor),
+            label: Text(
+              'Save',
+              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -147,25 +152,35 @@ class _FilterScreenState extends State<FilterScreen> {
                       _previewBytes!,
                       fit: BoxFit.contain,
                     )
-                  : const CircularProgressIndicator(color: const Color(0xFF00E5FF)),
+                  : CircularProgressIndicator(color: primaryColor),
             ),
           ),
           if (_isProcessing)
-            const LinearProgressIndicator(color: const Color(0xFF00E5FF), backgroundColor: Colors.transparent),
+            LinearProgressIndicator(color: primaryColor, backgroundColor: Colors.transparent),
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            color: const Color(0xFF131B2E),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  _buildFilterOption(ScanFilterType.magicColor, 'Magic Color', Icons.auto_awesome),
-                  _buildFilterOption(ScanFilterType.sharpBW, 'Sharp B&W', Icons.contrast),
-                  _buildFilterOption(ScanFilterType.grayscale, 'Grayscale', Icons.filter_b_and_w),
-                  _buildFilterOption(ScanFilterType.lighten, 'Lighten', Icons.wb_sunny_outlined),
-                  _buildFilterOption(ScanFilterType.original, 'Original', Icons.image),
-                ],
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+                ),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    _buildFilterOption(ScanFilterType.magicColor, 'Magic Color', Icons.auto_awesome, theme),
+                    _buildFilterOption(ScanFilterType.sharpBW, 'Sharp B&W', Icons.contrast, theme),
+                    _buildFilterOption(ScanFilterType.grayscale, 'Grayscale', Icons.filter_b_and_w, theme),
+                    _buildFilterOption(ScanFilterType.lighten, 'Lighten', Icons.wb_sunny_outlined, theme),
+                    _buildFilterOption(ScanFilterType.original, 'Original', Icons.image_outlined, theme),
+                  ],
+                ),
               ),
             ),
           ),
@@ -174,34 +189,54 @@ class _FilterScreenState extends State<FilterScreen> {
     );
   }
 
-  Widget _buildFilterOption(ScanFilterType filter, String label, IconData icon) {
+  Widget _buildFilterOption(
+    ScanFilterType filter,
+    String label,
+    IconData icon,
+    ThemeData theme,
+  ) {
     final bool isSelected = _selectedFilter == filter;
+    final primaryColor = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 6.0),
       child: InkWell(
-        onTap: () => _applyFilter(filter),
-        borderRadius: BorderRadius.circular(12),
+        onTap: _isProcessing ? null : () => _applyFilter(filter),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF0066FF).withOpacity(0.25) : Colors.black45,
-            borderRadius: BorderRadius.circular(12),
+            color: isSelected
+                ? primaryColor.withOpacity(isDark ? 0.2 : 0.12)
+                : (isDark ? Colors.black26 : Colors.black.withOpacity(0.04)),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isSelected ? const Color(0xFF00E5FF) : Colors.white24,
+              color: isSelected
+                  ? primaryColor
+                  : theme.colorScheme.outlineVariant.withOpacity(0.4),
               width: isSelected ? 2.0 : 1.0,
             ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: isSelected ? const Color(0xFF00E5FF) : Colors.white70, size: 26),
+              Icon(
+                icon,
+                color: isSelected
+                    ? primaryColor
+                    : theme.colorScheme.onSurface.withOpacity(0.7),
+                size: 24,
+              ),
               const SizedBox(height: 6),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? const Color(0xFF00E5FF) : Colors.white70,
+                  color: isSelected
+                      ? primaryColor
+                      : theme.colorScheme.onSurface.withOpacity(0.8),
                   fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 ),
               ),
             ],
@@ -211,4 +246,3 @@ class _FilterScreenState extends State<FilterScreen> {
     );
   }
 }
-

@@ -1,10 +1,14 @@
-/// Document category identified by Gemma.
+/// Extended document categories identified by ClearScan on-device intelligence.
 enum DocumentType {
   receipt,
   invoice,
   contract,
   idCard,
   businessCard,
+  bankStatement,
+  taxDocument,
+  medicalPrescription,
+  certificate,
   notes,
   whiteboard,
   book,
@@ -24,6 +28,14 @@ extension DocumentTypeExtension on DocumentType {
         return 'ID / Passport';
       case DocumentType.businessCard:
         return 'Business Card';
+      case DocumentType.bankStatement:
+        return 'Bank Statement';
+      case DocumentType.taxDocument:
+        return 'Tax Document';
+      case DocumentType.medicalPrescription:
+        return 'Medical / Prescription';
+      case DocumentType.certificate:
+        return 'Certificate / Diploma';
       case DocumentType.notes:
         return 'Handwritten Notes';
       case DocumentType.whiteboard:
@@ -34,29 +46,35 @@ extension DocumentTypeExtension on DocumentType {
         return 'Document';
     }
   }
+}
 
-  String get iconName {
-    switch (this) {
-      case DocumentType.receipt:
-        return 'receipt_long';
-      case DocumentType.invoice:
-        return 'request_quote';
-      case DocumentType.contract:
-        return 'gavel';
-      case DocumentType.idCard:
-        return 'badge';
-      case DocumentType.businessCard:
-        return 'contact_page';
-      case DocumentType.notes:
-        return 'edit_note';
-      case DocumentType.whiteboard:
-        return 'co_present';
-      case DocumentType.book:
-        return 'menu_book';
-      case DocumentType.other:
-        return 'description';
-    }
-  }
+/// A structured line item (e.g. from an invoice or receipt table).
+class DocumentLineItem {
+  final String description;
+  final int quantity;
+  final String unitPrice;
+  final String totalPrice;
+
+  const DocumentLineItem({
+    required this.description,
+    this.quantity = 1,
+    required this.unitPrice,
+    required this.totalPrice,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'description': description,
+        'quantity': quantity,
+        'unitPrice': unitPrice,
+        'totalPrice': totalPrice,
+      };
+
+  factory DocumentLineItem.fromJson(Map<String, dynamic> json) => DocumentLineItem(
+        description: json['description'] as String,
+        quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+        unitPrice: json['unitPrice'] as String,
+        totalPrice: json['totalPrice'] as String,
+      );
 }
 
 /// A structured key-value field extracted from document text.
@@ -64,7 +82,7 @@ class ExtractedField {
   final String key;
   final String value;
   final double confidence;
-  final String? category; // 'financial', 'identity', 'date', 'contact'
+  final String? category; // 'financial', 'identity', 'date', 'contact', 'legal'
 
   const ExtractedField({
     required this.key,
@@ -93,16 +111,18 @@ class GemmaDocumentAnalysis {
   final DocumentType documentType;
   final String summary;
   final List<ExtractedField> extractedFields;
+  final List<DocumentLineItem> lineItems;
   final List<String> keyPoints;
   final String? suggestedAction;
   final String rawOcrText;
   final DateTime analyzedAt;
-  final String modelName; // e.g. "Gemma 2B (On-Device)", "PaliGemma"
+  final String modelName;
 
   GemmaDocumentAnalysis({
     required this.documentType,
     required this.summary,
     required this.extractedFields,
+    this.lineItems = const [],
     required this.keyPoints,
     this.suggestedAction,
     required this.rawOcrText,
@@ -114,6 +134,7 @@ class GemmaDocumentAnalysis {
         'documentType': documentType.name,
         'summary': summary,
         'extractedFields': extractedFields.map((f) => f.toJson()).toList(),
+        'lineItems': lineItems.map((item) => item.toJson()).toList(),
         'keyPoints': keyPoints,
         'suggestedAction': suggestedAction,
         'rawOcrText': rawOcrText,
@@ -132,6 +153,10 @@ class GemmaDocumentAnalysis {
               ?.map((f) => ExtractedField.fromJson(f as Map<String, dynamic>))
               .toList() ??
           [],
+      lineItems: (json['lineItems'] as List<dynamic>?)
+              ?.map((item) => DocumentLineItem.fromJson(item as Map<String, dynamic>))
+              .toList() ??
+          [],
       keyPoints: (json['keyPoints'] as List<dynamic>?)
               ?.map((p) => p.toString())
               .toList() ??
@@ -145,4 +170,3 @@ class GemmaDocumentAnalysis {
     );
   }
 }
-

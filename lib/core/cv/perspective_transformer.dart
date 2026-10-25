@@ -6,8 +6,15 @@ import '../models/document.dart';
 /// Perspective transformation and document de-warping engine.
 /// Computes the projective homography matrix and resamples pixels with bilinear interpolation.
 class PerspectiveTransformer {
+  /// Maximum width/height for rectified scanned pages (prevents memory explosion on 100MP cameras).
+  static const int maxOutputDimension = 2048;
+
   /// Warps the quadrilateral defined by [corners] in [sourceImage] to a flat, rectified rectangle.
-  static img.Image warpPerspective(img.Image sourceImage, DocumentCorners corners) {
+  static img.Image warpPerspective(
+    img.Image sourceImage,
+    DocumentCorners corners, {
+    int maxOutputDimension = maxOutputDimension,
+  }) {
     final Offset tl = corners.topLeft;
     final Offset tr = corners.topRight;
     final Offset br = corners.bottomRight;
@@ -16,11 +23,22 @@ class PerspectiveTransformer {
     // 1. Calculate destination dimensions based on max opposing edge lengths
     final double widthTop = _distance(tl, tr);
     final double widthBottom = _distance(bl, br);
-    final int dstW = max(widthTop, widthBottom).round().clamp(100, 4000);
+    double targetW = max(widthTop, widthBottom);
 
     final double heightLeft = _distance(tl, bl);
     final double heightRight = _distance(tr, br);
-    final int dstH = max(heightLeft, heightRight).round().clamp(100, 4000);
+    double targetH = max(heightLeft, heightRight);
+
+    // Limit maximum dimension while preserving aspect ratio
+    final double maxDim = max(targetW, targetH);
+    if (maxDim > maxOutputDimension) {
+      final double scaleDown = maxOutputDimension / maxDim;
+      targetW *= scaleDown;
+      targetH *= scaleDown;
+    }
+
+    final int dstW = targetW.round().clamp(100, maxOutputDimension);
+    final int dstH = targetH.round().clamp(100, maxOutputDimension);
 
     final img.Image result = img.Image(width: dstW, height: dstH, numChannels: sourceImage.numChannels);
 
@@ -42,6 +60,12 @@ class PerspectiveTransformer {
     final int srcW = sourceImage.width;
     final int srcH = sourceImage.height;
 
+    // Reuse 4 persistent pixel buffers to avoid millions of heap allocations in the inner loop
+    final img.Pixel p11 = sourceImage.getPixel(0, 0);
+    final img.Pixel p21 = sourceImage.getPixel(0, 0);
+    final img.Pixel p12 = sourceImage.getPixel(0, 0);
+    final img.Pixel p22 = sourceImage.getPixel(0, 0);
+
     // 3. Resample every target pixel with Bilinear Interpolation
     for (int y = 0; y < dstH; y++) {
       for (int x = 0; x < dstW; x++) {
@@ -53,10 +77,10 @@ class PerspectiveTransformer {
         final double srcY = (m10 * x + m11 * y + m12) * invW;
 
         if (srcX >= 0 && srcX < srcW - 1 && srcY >= 0 && srcY < srcH - 1) {
-          _sampleAndSetBilinear(sourceImage, result, x, y, srcX, srcY);
+          _sampleAndSetBilinear(sourceImage, result, x, y, srcX, srcY, p11, p21, p12, p22);
         } else if (srcX >= 0 && srcX < srcW && srcY >= 0 && srcY < srcH) {
-          final p = sourceImage.getPixel(srcX.floor(), srcY.floor());
-          result.setPixelRgba(x, y, p.r.toInt(), p.g.toInt(), p.b.toInt(), p.a.toInt());
+          sourceImage.getPixel(srcX.floor(), srcY.floor(), p11);
+          result.setPixelRgba(x, y, p11.r.toInt(), p11.g.toInt(), p11.b.toInt(), p11.a.toInt());
         }
       }
     }
@@ -71,6 +95,7 @@ class PerspectiveTransformer {
   }
 
   /// Bilinear interpolation sampler for anti-aliased sub-pixel mapping.
+  /// Reuses [p11], [p21], [p12], [p22] buffers for zero-allocation performance.
   static void _sampleAndSetBilinear(
     img.Image src,
     img.Image dst,
@@ -78,6 +103,10 @@ class PerspectiveTransformer {
     int dstY,
     double x,
     double y,
+    img.Pixel p11,
+    img.Pixel p21,
+    img.Pixel p12,
+    img.Pixel p22,
   ) {
     final int x1 = x.floor();
     final int y1 = y.floor();
@@ -89,10 +118,10 @@ class PerspectiveTransformer {
     final double ifx = 1.0 - fx;
     final double ify = 1.0 - fy;
 
-    final img.Pixel p11 = src.getPixel(x1, y1);
-    final img.Pixel p21 = src.getPixel(x2, y1);
-    final img.Pixel p12 = src.getPixel(x1, y2);
-    final img.Pixel p22 = src.getPixel(x2, y2);
+    src.getPixel(x1, y1, p11);
+    src.getPixel(x2, y1, p21);
+    src.getPixel(x1, y2, p12);
+    src.getPixel(x2, y2, p22);
 
     final double r = (p11.r * ifx + p21.r * fx) * ify + (p12.r * ifx + p22.r * fx) * fy;
     final double g = (p11.g * ifx + p21.g * fx) * ify + (p12.g * ifx + p22.g * fx) * fy;
@@ -139,7 +168,7 @@ class PerspectiveTransformer {
       b[r1] = dx;
 
       a[r2][0] = 0.0;
-      a[r2][0] = 0.0;
+      a[r2][1] = 0.0;
       a[r2][2] = 0.0;
       a[r2][3] = sx;
       a[r2][4] = sy;
@@ -203,4 +232,3 @@ class PerspectiveTransformer {
     return b;
   }
 }
-
