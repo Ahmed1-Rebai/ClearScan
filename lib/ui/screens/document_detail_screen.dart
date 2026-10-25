@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
 import '../../core/models/document.dart';
 import '../../core/storage/document_repository.dart';
 import '../../core/storage/pdf_service.dart';
@@ -32,17 +31,27 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     final newTitle = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Rename Document'),
+        backgroundColor: const Color(0xFF131B2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Rename Document', style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: controller,
           autofocus: true,
+          style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(labelText: 'Document Title'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00E5FF),
+              foregroundColor: const Color(0xFF050C1A),
+            ),
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Save'),
+            child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -87,12 +96,14 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF131B2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Delete Document?'),
-        content: const Text('This will permanently delete this document and all its scanned pages.'),
+        content: const Text('This will permanently delete this document and all its scanned pages from local storage.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
@@ -108,100 +119,227 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentPage = _doc.pages.isNotEmpty ? _doc.pages[_currentPageIndex] : null;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isWideScreen = constraints.maxWidth >= 900;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: InkWell(
-          onTap: _renameDocument,
+        return Scaffold(
+          backgroundColor: const Color(0xFF0B0F19),
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF131B2E),
+            title: InkWell(
+              onTap: _renameDocument,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(child: Text(_doc.title, overflow: TextOverflow.ellipsis)),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.edit, size: 15, color: Color(0xFF00E5FF)),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              if (!isWideScreen)
+                IconButton(
+                  icon: const Icon(Icons.psychology, color: Color(0xFF00E5FF)),
+                  tooltip: 'Gemma Local AI Insights',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GemmaInsightsScreen(document: _doc),
+                      ),
+                    );
+                  },
+                ),
+              IconButton(
+                icon: _isGeneratingPdf
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF)))
+                    : const Icon(Icons.share_outlined, color: Colors.white70),
+                tooltip: 'Export & Share PDF',
+                onPressed: _isGeneratingPdf ? null : _exportPdf,
+              ),
+              PopupMenuButton<String>(
+                iconColor: Colors.white70,
+                color: const Color(0xFF131B2E),
+                onSelected: (val) {
+                  if (val == 'delete') _deleteDocument();
+                  if (val == 'rename') _renameDocument();
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                  const PopupMenuItem(value: 'delete', child: Text('Delete Document', style: TextStyle(color: Colors.redAccent))),
+                ],
+              ),
+            ],
+          ),
+          body: _doc.pages.isEmpty
+              ? const Center(child: Text('No pages in this document', style: TextStyle(color: Colors.white54)))
+              : isWideScreen
+                  ? _buildWideScreenLayout()
+                  : _buildMobileLayout(),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return Column(
+      children: [
+        // Top Page Counter & AI Banner
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: const Color(0xFF131B2E),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Flexible(child: Text(_doc.title, overflow: TextOverflow.ellipsis)),
-              const SizedBox(width: 4),
-              const Icon(Icons.edit, size: 16, color: Colors.tealAccent),
+              Text(
+                'Page ${_currentPageIndex + 1} of ${_doc.pageCount}',
+                style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => GemmaInsightsScreen(document: _doc),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00E5FF).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.auto_awesome, color: Color(0xFF00E5FF), size: 14),
+                      SizedBox(width: 4),
+                      Text('Gemma Intelligence', style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.psychology, color: Colors.tealAccent),
-            tooltip: 'Gemma Local AI Insights',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => GemmaInsightsScreen(document: _doc),
+
+        // Main Page View (Interactive Viewer)
+        Expanded(
+          child: PageView.builder(
+            itemCount: _doc.pageCount,
+            onPageChanged: (idx) => setState(() => _currentPageIndex = idx),
+            itemBuilder: (context, index) {
+              final page = _doc.pages[index];
+              final imgPath = page.processedImagePath ?? page.rawImagePath;
+              return InteractiveViewer(
+                minScale: 1.0,
+                maxScale: 4.0,
+                child: Center(
+                  child: Image.file(
+                    File(imgPath),
+                    fit: BoxFit.contain,
+                  ),
                 ),
               );
             },
           ),
-          IconButton(
-            icon: _isGeneratingPdf
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.picture_as_pdf),
-            tooltip: 'Export Searchable PDF',
-            onPressed: _isGeneratingPdf ? null : _exportPdf,
-          ),
-          PopupMenuButton<String>(
-            onSelected: (val) {
-              if (val == 'delete') _deleteDocument();
-              if (val == 'rename') _renameDocument();
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'rename', child: Text('Rename')),
-              const PopupMenuItem(value: 'delete', child: Text('Delete Document', style: TextStyle(color: Colors.red))),
+        ),
+
+        // Bottom Page Control Bar
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          color: const Color(0xFF131B2E),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              TextButton.icon(
+                onPressed: _reCropCurrentPage,
+                icon: const Icon(Icons.crop, color: Color(0xFF00E5FF)),
+                label: const Text('Re-Crop', style: TextStyle(color: Color(0xFF00E5FF))),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0066FF),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => GemmaInsightsScreen(document: _doc),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.psychology, size: 18),
+                label: const Text('Gemma AI'),
+              ),
+              TextButton.icon(
+                onPressed: _exportPdf,
+                icon: const Icon(Icons.picture_as_pdf_outlined, color: Color(0xFF00E5FF)),
+                label: const Text('Export PDF', style: TextStyle(color: Color(0xFF00E5FF))),
+              ),
             ],
           ),
-        ],
-      ),
-      body: _doc.pages.isEmpty
-          ? const Center(child: Text('No pages in this document', style: TextStyle(color: Colors.white54)))
-          : Column(
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWideScreenLayout() {
+    return Row(
+      children: [
+        // Left: Interactive Document Preview
+        Expanded(
+          flex: 6,
+          child: Container(
+            color: const Color(0xFF0B0F19),
+            child: Column(
               children: [
-                // Top Page Counter & AI Banner
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  color: Colors.grey[900],
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  color: const Color(0xFF131B2E),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'Page ${_currentPageIndex + 1} of ${_doc.pageCount}',
-                        style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white70),
                       ),
-                      InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => GemmaInsightsScreen(document: _doc),
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF00E5FF),
+                              side: const BorderSide(color: Color(0xFF00E5FF)),
                             ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.teal.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.tealAccent.withOpacity(0.5)),
+                            onPressed: _reCropCurrentPage,
+                            icon: const Icon(Icons.crop, size: 16),
+                            label: const Text('Re-Crop Page'),
                           ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.auto_awesome, color: Colors.tealAccent, size: 14),
-                              SizedBox(width: 4),
-                              Text('Gemma Intelligence', style: TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                            ],
+                          const SizedBox(width: 10),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00E5FF),
+                              foregroundColor: const Color(0xFF050C1A),
+                            ),
+                            onPressed: _exportPdf,
+                            icon: const Icon(Icons.picture_as_pdf, size: 16),
+                            label: const Text('Export PDF', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-
-                // Main Page View (Interactive Viewer)
                 Expanded(
                   child: PageView.builder(
                     itemCount: _doc.pageCount,
@@ -213,56 +351,29 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                         minScale: 1.0,
                         maxScale: 4.0,
                         child: Center(
-                          child: Image.file(
-                            File(imgPath),
-                            fit: BoxFit.contain,
+                          child: Padding(
+                            padding: const EdgeInsets.all(24.0),
+                            child: Image.file(File(imgPath), fit: BoxFit.contain),
                           ),
                         ),
                       );
                     },
                   ),
                 ),
-
-                // Bottom Page Control Bar
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  color: Colors.grey[900],
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      TextButton.icon(
-                        onPressed: _reCropCurrentPage,
-                        icon: const Icon(Icons.crop, color: Colors.tealAccent),
-                        label: const Text('Re-Crop', style: TextStyle(color: Colors.tealAccent)),
-                      ),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.teal,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => GemmaInsightsScreen(document: _doc),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.psychology),
-                        label: const Text('Gemma AI'),
-                      ),
-                      TextButton.icon(
-                        onPressed: _exportPdf,
-                        icon: const Icon(Icons.share, color: Colors.tealAccent),
-                        label: const Text('Share PDF', style: TextStyle(color: Colors.tealAccent)),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
+          ),
+        ),
+
+        // Vertical Divider
+        Container(width: 1, color: const Color(0xFF1E293B)),
+
+        // Right Pane: Integrated Gemma AI Insights
+        Expanded(
+          flex: 5,
+          child: GemmaInsightsScreen(document: _doc),
+        ),
+      ],
     );
   }
 }
-

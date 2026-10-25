@@ -216,7 +216,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             onPressed: () => setState(() => _isBatchMode = !_isBatchMode),
             child: Text(
               _isBatchMode ? 'Single' : 'Batch',
-              style: const TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold),
+              style: const TextStyle(color: const Color(0xFF00E5FF), fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -228,12 +228,12 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             CameraPreview(_cameraController!)
           else
             Container(
-              color: Colors.grey[950],
+              color: const Color(0xFF0B0F19),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.document_scanner, size: 72, color: Colors.tealAccent.withOpacity(0.8)),
+                    Icon(Icons.document_scanner, size: 72, color: const Color(0xFF00E5FF).withOpacity(0.8)),
                     const SizedBox(height: 16),
                     const Text('Document Viewfinder Ready', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
@@ -248,7 +248,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             child: Container(
               margin: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.tealAccent.withOpacity(0.6), width: 2),
+                border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.6), width: 2),
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
@@ -283,7 +283,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     child: Container(
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.tealAccent,
+                        color: const Color(0xFF00E5FF),
                       ),
                       child: _isCapturing
                           ? const Center(child: CircularProgressIndicator(strokeWidth: 3, color: Colors.black))
@@ -296,7 +296,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 if (_isBatchMode && _batchPages.isNotEmpty)
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.tealAccent,
+                      backgroundColor: const Color(0xFF00E5FF),
                       foregroundColor: Colors.black,
                       shape: const CircleBorder(),
                       padding: const EdgeInsets.all(16),

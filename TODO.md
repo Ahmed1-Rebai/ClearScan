@@ -1,4 +1,4 @@
-# CamScanner Local AI (Gemma Edition) — Project Roadmap & TODO
+# ClearScan (Local AI Scanner) — Project Roadmap & TODO
 
 A fully private, high-performance, 100% on-device document scanning and intelligence application. Zero third-party cloud APIs, zero tracking, zero external telemetry.
 
@@ -9,7 +9,8 @@ A fully private, high-performance, 100% on-device document scanning and intellig
   - [x] Initialize Git repository (`main` branch)
   - [x] Configure Flutter 3.41 & Android SDK (Java 17 OpenJDK, API 35)
   - [x] Create project `.gitignore`, `README.md`, and `TODO.md`
-  - [x] Verify environment readiness across Android, Linux, and Web
+  - [x] Configure remote repository: `https://github.com/Ahmed1-Rebai/ClearScan`
+  - [x] Add brand logo assets and Android mipmap launcher icons
 
 - [x] **Phase 1: Computer Vision & Document Processing Engine**
   - [x] Implement pure-Dart/native image processing core:
@@ -21,7 +22,7 @@ A fully private, high-performance, 100% on-device document scanning and intellig
     - [x] 8x8 Linear Direct Linear Transform (DLT) with Gaussian elimination and partial pivoting
     - [x] Bi-linear sub-pixel interpolation perspective warp
     - [x] High-resolution document flattening
-  - [x] CamScanner-Grade Image Enhancement Filters:
+  - [x] Image Enhancement Filters:
     - [x] *Original*: Preserved uncompressed raw capture
     - [x] *Magic Color*: Background illumination normalization, shadow suppression, high-pass edge crisping, and color saturation boosting
     - [x] *Sharp B&W*: Otsu global thresholding binarization
@@ -61,7 +62,8 @@ A fully private, high-performance, 100% on-device document scanning and intellig
     - [x] Direct export and system share sheet via `package:printing`
 
 - [x] **Phase 5: User Interface, Polish & Verification**
-  - [x] Material 3 Dark Theme with teal accents and clean typography
+  - [x] ClearScan Deep Midnight & Neon Cyan Material 3 Theme
+  - [x] Fully responsive layout for phones, tablets, and desktop
   - [x] Comprehensive test suite (10/10 passing unit & widget tests)
   - [x] Verified Linux desktop compilation (`build/linux/x64/debug/bundle/cam_scan`)
   - [x] Verified Android APK compilation (`build/app/outputs/flutter-apk/app-debug.apk`)

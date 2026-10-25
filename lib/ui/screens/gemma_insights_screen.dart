@@ -95,16 +95,22 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: const Color(0xFF131B2E),
         title: Row(
           children: [
-            const Icon(Icons.psychology, color: Colors.tealAccent),
+            const Icon(Icons.psychology, color: Color(0xFF00E5FF)),
             const SizedBox(width: 8),
-            Text('${GemmaLocalService.instance.activeModelName}'),
+            Text(
+              GemmaLocalService.instance.activeModelName,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.tealAccent,
+          indicatorColor: const Color(0xFF00E5FF),
+          labelColor: const Color(0xFF00E5FF),
+          unselectedLabelColor: Colors.white60,
           tabs: const [
             Tab(icon: Icon(Icons.analytics_outlined), text: 'Extraction'),
             Tab(icon: Icon(Icons.chat_bubble_outline), text: 'Doc Q&A'),
@@ -117,7 +123,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: Colors.tealAccent),
+                  CircularProgressIndicator(color: const Color(0xFF00E5FF)),
                   SizedBox(height: 16),
                   Text('Gemma running on-device inference...', style: TextStyle(color: Colors.white70)),
                   SizedBox(height: 4),
@@ -146,19 +152,19 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.teal.withOpacity(0.12),
+            color: const Color(0xFF0066FF).withOpacity(0.12),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.tealAccent.withOpacity(0.4)),
+            border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
           ),
           child: const Row(
             children: [
-              Icon(Icons.shield_outlined, color: Colors.tealAccent, size: 28),
+              Icon(Icons.shield_outlined, color: const Color(0xFF00E5FF), size: 28),
               SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('100% On-Device Privacy', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.tealAccent)),
+                    Text('100% On-Device Privacy', style: TextStyle(fontWeight: FontWeight.bold, color: const Color(0xFF00E5FF))),
                     Text('Processed locally in phone memory with Gemma. No data sent to third-party servers.', style: TextStyle(fontSize: 12, color: Colors.white70)),
                   ],
                 ),
@@ -170,7 +176,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
 
         // Document Category Card
         Card(
-          color: Colors.grey[900],
+          color: const Color(0xFF131B2E),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -181,9 +187,9 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Chip(
-                      avatar: const Icon(Icons.category, size: 18, color: Colors.tealAccent),
-                      label: Text(_analysis!.documentType.displayName, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.tealAccent)),
-                      backgroundColor: Colors.teal.withOpacity(0.2),
+                      avatar: const Icon(Icons.category, size: 18, color: const Color(0xFF00E5FF)),
+                      label: Text(_analysis!.documentType.displayName, style: const TextStyle(fontWeight: FontWeight.bold, color: const Color(0xFF00E5FF))),
+                      backgroundColor: const Color(0xFF0066FF).withOpacity(0.2),
                     ),
                     if (_analysis!.suggestedAction != null)
                       Container(
@@ -208,10 +214,10 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
         const SizedBox(height: 16),
 
         // Structured Key Fields
-        const Text('Extracted Fields', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.tealAccent)),
+        const Text('Extracted Fields', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF00E5FF))),
         const SizedBox(height: 8),
         Card(
-          color: Colors.grey[900],
+          color: const Color(0xFF131B2E),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: ListView.separated(
             shrinkWrap: true,
@@ -221,7 +227,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
             itemBuilder: (context, index) {
               final field = _analysis!.extractedFields[index];
               return ListTile(
-                leading: Icon(_getFieldIcon(field.category), color: Colors.tealAccent),
+                leading: Icon(_getFieldIcon(field.category), color: const Color(0xFF00E5FF)),
                 title: Text(field.key, style: TextStyle(fontSize: 13, color: Colors.grey[400])),
                 subtitle: Text(field.value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
                 trailing: IconButton(
@@ -240,7 +246,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
         const SizedBox(height: 16),
 
         // Key Points
-        const Text('Key Highlights', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.tealAccent)),
+        const Text('Key Highlights', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF00E5FF))),
         const SizedBox(height: 8),
         ..._analysis!.keyPoints.map(
           (point) => Padding(
@@ -248,7 +254,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.check_circle_outline, color: Colors.tealAccent, size: 18),
+                const Icon(Icons.check_circle_outline, color: const Color(0xFF00E5FF), size: 18),
                 const SizedBox(width: 8),
                 Expanded(child: Text(point, style: const TextStyle(fontSize: 14))),
               ],
@@ -278,7 +284,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
                   decoration: BoxDecoration(
-                    color: isUser ? Colors.teal : Colors.grey[850],
+                    color: isUser ? const Color(0xFF0066FF) : const Color(0xFF1A2234),
                     borderRadius: BorderRadius.circular(16).copyWith(
                       bottomRight: isUser ? const Radius.circular(0) : null,
                       bottomLeft: !isUser ? const Radius.circular(0) : null,
@@ -302,7 +308,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.tealAccent)),
+                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: const Color(0xFF00E5FF))),
                 SizedBox(width: 8),
                 Text('Gemma is thinking offline...', style: TextStyle(fontSize: 12, color: Colors.white54)),
               ],
@@ -310,7 +316,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
           ),
         Container(
           padding: const EdgeInsets.all(12),
-          color: Colors.grey[900],
+          color: const Color(0xFF131B2E),
           child: Row(
             children: [
               Expanded(
@@ -330,7 +336,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
               const SizedBox(width: 8),
               IconButton.filled(
                 icon: const Icon(Icons.send, color: Colors.black),
-                style: IconButton.styleFrom(backgroundColor: Colors.tealAccent),
+                style: IconButton.styleFrom(backgroundColor: const Color(0xFF00E5FF)),
                 onPressed: _askQuestion,
               ),
             ],
@@ -369,7 +375,7 @@ class _GemmaInsightsScreenState extends State<GemmaInsightsScreen> with SingleTi
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey[900],
+                color: const Color(0xFF131B2E),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: SingleChildScrollView(

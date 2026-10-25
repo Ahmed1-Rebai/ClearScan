@@ -133,8 +133,8 @@ class _FilterScreenState extends State<FilterScreen> {
           ),
           TextButton.icon(
             onPressed: _isProcessing ? null : _saveAndFinish,
-            icon: const Icon(Icons.check, color: Colors.tealAccent),
-            label: const Text('Save', style: TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold)),
+            icon: const Icon(Icons.check, color: const Color(0xFF00E5FF)),
+            label: const Text('Save', style: TextStyle(color: const Color(0xFF00E5FF), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -147,14 +147,14 @@ class _FilterScreenState extends State<FilterScreen> {
                       _previewBytes!,
                       fit: BoxFit.contain,
                     )
-                  : const CircularProgressIndicator(color: Colors.tealAccent),
+                  : const CircularProgressIndicator(color: const Color(0xFF00E5FF)),
             ),
           ),
           if (_isProcessing)
-            const LinearProgressIndicator(color: Colors.tealAccent, backgroundColor: Colors.transparent),
+            const LinearProgressIndicator(color: const Color(0xFF00E5FF), backgroundColor: Colors.transparent),
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            color: Colors.grey[900],
+            color: const Color(0xFF131B2E),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -184,22 +184,22 @@ class _FilterScreenState extends State<FilterScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.teal.withOpacity(0.25) : Colors.black45,
+            color: isSelected ? const Color(0xFF0066FF).withOpacity(0.25) : Colors.black45,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected ? Colors.tealAccent : Colors.white24,
+              color: isSelected ? const Color(0xFF00E5FF) : Colors.white24,
               width: isSelected ? 2.0 : 1.0,
             ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: isSelected ? Colors.tealAccent : Colors.white70, size: 26),
+              Icon(icon, color: isSelected ? const Color(0xFF00E5FF) : Colors.white70, size: 26),
               const SizedBox(height: 6),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.tealAccent : Colors.white70,
+                  color: isSelected ? const Color(0xFF00E5FF) : Colors.white70,
                   fontSize: 12,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),

@@ -215,13 +215,13 @@ class _CropScreenState extends State<CropScreen> {
         actions: [
           TextButton.icon(
             onPressed: _proceedToFilter,
-            icon: const Icon(Icons.check, color: Colors.tealAccent),
-            label: const Text('Next', style: TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold)),
+            icon: const Icon(Icons.check, color: const Color(0xFF00E5FF)),
+            label: const Text('Next', style: TextStyle(color: const Color(0xFF00E5FF), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.tealAccent))
+          ? const Center(child: CircularProgressIndicator(color: const Color(0xFF00E5FF)))
           : Column(
               children: [
                 Expanded(
@@ -266,7 +266,7 @@ class _CropScreenState extends State<CropScreen> {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  color: Colors.grey[900],
+                  color: const Color(0xFF131B2E),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -277,8 +277,8 @@ class _CropScreenState extends State<CropScreen> {
                       ),
                       TextButton.icon(
                         onPressed: _autoDetect,
-                        icon: const Icon(Icons.auto_fix_high, color: Colors.tealAccent),
-                        label: const Text('Auto-Detect', style: TextStyle(color: Colors.tealAccent)),
+                        icon: const Icon(Icons.auto_fix_high, color: const Color(0xFF00E5FF)),
+                        label: const Text('Auto-Detect', style: TextStyle(color: const Color(0xFF00E5FF))),
                       ),
                     ],
                   ),

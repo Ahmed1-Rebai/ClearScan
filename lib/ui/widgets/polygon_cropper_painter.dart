@@ -10,7 +10,7 @@ class PolygonCropperPainter extends CustomPainter {
   PolygonCropperPainter({
     required this.corners,
     this.activeCornerIndex,
-    this.primaryColor = Colors.tealAccent,
+    this.primaryColor = const Color(0xFF00E5FF),
   });
 
   @override

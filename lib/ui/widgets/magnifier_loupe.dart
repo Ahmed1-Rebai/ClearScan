@@ -35,7 +35,7 @@ class MagnifierLoupe extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: Colors.black,
-          border: Border.all(color: Colors.tealAccent, width: 2.5),
+          border: Border.all(color: const Color(0xFF00E5FF), width: 2.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.4),
@@ -115,7 +115,7 @@ class _CrosshairPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.tealAccent
+      ..color = const Color(0xFF00E5FF)
       ..strokeWidth = 1.5;
 
     final cx = size.width / 2;
