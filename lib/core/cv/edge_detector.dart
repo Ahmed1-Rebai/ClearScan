@@ -186,3 +186,4 @@ class DocumentEdgeDetector {
     return (area / 2.0).abs();
   }
 }
+
