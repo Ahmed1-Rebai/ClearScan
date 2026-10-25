@@ -1,7 +1,7 @@
 # ClearScan — Local AI Document Scanner
 
 <div align="center">
-  <img src="assets/images/clearscan_logo.png" alt="ClearScan Logo" width="160" />
+  <img src="assets/images/clearscan_full.png" alt="ClearScan Logo" width="280" />
   <h3>ClearScan: Zero-Cloud, 100% On-Device Document Intelligence Scanner</h3>
   <p><strong>Private by Design. Powered by Gemma. No Third Parties.</strong></p>
 

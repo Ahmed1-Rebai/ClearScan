@@ -118,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.asset(
-                'assets/images/clearscan_logo.png',
+                'assets/images/clearscan_icon.png',
                 width: 32,
                 height: 32,
                 fit: BoxFit.contain,
@@ -286,38 +286,24 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 110,
-              height: 110,
-              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(maxWidth: 240, maxHeight: 240),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(24),
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF00E5FF).withOpacity(0.25),
+                    const Color(0xFF00E5FF).withOpacity(0.18),
                     Colors.transparent,
                   ],
                 ),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(55),
-                child: Image.asset(
-                  'assets/images/clearscan_logo.png',
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.document_scanner, size: 64, color: Color(0xFF00E5FF)),
-                ),
+              child: Image.asset(
+                'assets/images/clearscan_full.png',
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(Icons.document_scanner, size: 72, color: Color(0xFF00E5FF)),
               ),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'ClearScan',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.5),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'LOCAL AI DOCUMENT SCANNER',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: Color(0xFF00E5FF)),
-            ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Text(
