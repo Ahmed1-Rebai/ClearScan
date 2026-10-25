@@ -1,69 +1,44 @@
 # ClearScan (Local AI Scanner) — Project Roadmap & TODO
 
-A fully private, high-performance, 100% on-device document scanning and intelligence application. Zero third-party cloud APIs, zero tracking, zero external telemetry.
+A fully private, 100% on-device document scanning and intelligence application. Zero third-party cloud APIs, zero tracking, zero external telemetry.
 
 ---
 
-## 📋 Architecture & Core Pillars
-- [x] **Repository & Toolchain Setup**
-  - [x] Initialize Git repository (`main` branch)
-  - [x] Configure Flutter 3.41 & Android SDK (Java 17 OpenJDK, API 35)
-  - [x] Create project `.gitignore`, `README.md`, and `TODO.md`
-  - [x] Configure remote repository: `https://github.com/Ahmed1-Rebai/ClearScan`
-  - [x] Add brand logo assets and Android mipmap launcher icons
+## ✅ Done
 
-- [x] **Phase 1: Computer Vision & Document Processing Engine**
-  - [x] Implement pure-Dart/native image processing core:
-    - [x] Grayscale conversion and Gaussian blur
-    - [x] Sobel gradient & Canny edge detection
-    - [x] Diagonal projection extreme corner detection (`[Top-Left, Top-Right, Bottom-Right, Bottom-Left]`)
-    - [x] Convex hull & Shoelace polygon area sanity checks
-  - [x] Homography & Perspective Transformation:
-    - [x] 8x8 Linear Direct Linear Transform (DLT) with Gaussian elimination and partial pivoting
-    - [x] Bi-linear sub-pixel interpolation perspective warp
-    - [x] High-resolution document flattening
-  - [x] Image Enhancement Filters:
-    - [x] *Original*: Preserved uncompressed raw capture
-    - [x] *Magic Color*: Background illumination normalization, shadow suppression, high-pass edge crisping, and color saturation boosting
-    - [x] *Sharp B&W*: Otsu global thresholding binarization
-    - [x] *Grayscale*: Multi-tone smooth grayscale with contrast adjustment
-    - [x] *Lighten*: High-key gamma curve for paper whitening
+- [x] **Repository & toolchain**: Flutter 3.41, Android SDK 35 (Java 17), brand assets and launcher icons
+- [x] **Capture & import**
+  - [x] Full-resolution camera capture (`ResolutionPreset.max`), tap-to-focus, torch, lifecycle handling
+  - [x] Multi-page camera mode and multi-image gallery import
+  - [x] Ingestion: EXIF orientation baked into pixels, size cap, native decoding for very large photos, clear errors for unsupported formats
+- [x] **Computer vision (pure Dart, background isolates)**
+  - [x] Page detection: Sobel + non-max suppression + Hough lines, quads scored by edge support and paper/background contrast, full-frame fallback for close-ups
+  - [x] Text orientation detection (0/90/180/270°) from character components, white-corridor axis voting and ascender/descender asymmetry
+  - [x] Homography warp (DLT) with bilinear resampling on typed buffers, up to 3000 px
+  - [x] Filters on illumination-normalized luminance: Magic Color (adaptive ink/paper levels), adaptive B&W (Bradley), Grayscale, Lighten
+- [x] **OCR**
+  - [x] Google ML Kit Text Recognition v2 (bundled Latin model, offline)
+  - [x] OCR-specific preprocessing, orientation verification (gibberish/tilted lines → rotation trials)
+  - [x] Reading order via XY-cut (headers, columns), table/receipt rows kept together, de-hyphenation, OCR confusion fixes
+  - [x] Per-page OCR text and normalized line boxes stored with each page
+- [x] **Grounded document insights**
+  - [x] Classification (EN/FR) including course/exercise sheets
+  - [x] Label-based field extraction with source-line evidence (totals, VAT, stamp duty, references, dates, IBAN with checksum, tax IDs, contacts)
+  - [x] Totals cross-check and warnings; TND three-decimal amounts
+  - [x] Q&A that answers from the document or says the information is absent
+- [x] **Documents**
+  - [x] Scan review: per-page crop / enhance / rotate / delete, drag-to-reorder, add pages (also to existing documents)
+  - [x] Repository: atomic index writes, change notifications, safe concurrent updates, orphan image cleanup
+  - [x] Searchable PDF export (invisible OCR text layer)
+  - [x] Search by title and recognized text; filter by detected document type
+  - [x] Long-press multi-select and delete; light/dark/system theme remembered
+- [x] **Quality**
+  - [x] 215 automated tests, including layout-overflow tests of every screen (320–1280 px, text ×2)
+  - [x] Release builds without network permission
 
-- [x] **Phase 2: Camera Capture & Interactive Crop UI**
-  - [x] Camera interface with document viewfinder guide
-  - [x] Flash toggle, single scan, and multi-page batch mode toggle
-  - [x] Gallery image import with auto-orientation
-  - [x] Simulated fallback document generator for simulator / desktop testing
-  - [x] Interactive 4-point Magnetic Corner Adjustment:
-    - [x] Drag-to-adjust corner handles with smooth physics
-    - [x] Magnifying loupe widget (zoom lens above fingertip to place corners with pixel accuracy)
-    - [x] 3x3 internal perspective alignment grid
-    - [x] Auto-snapping to detected high-gradient page boundaries
+## 🔜 Next
 
-- [x] **Phase 3: On-Device AI Engine (Gemma / LiteRT / MediaPipe)**
-  - [x] On-device model pipeline design:
-    - [x] Zero cloud calls, 100% offline local model inference runner
-    - [x] Gemma 2B / 3B & PaliGemma structured prompt templates with turn delimiters
-  - [x] Local Document Intelligence Features:
-    - [x] **Automatic Document Classifier**: Identifies document type (Invoice, Receipt, ID Card, Contract, Notes, Business Card, Whiteboard)
-    - [x] **Structured Information Extraction**: Extracts vendor, dates, totals, reference numbers into structured key-value pairs
-    - [x] **On-Device Summarizer**: Executive summary and key bullet points
-    - [x] **Document Q&A / Chat**: Offline interactive conversational assistant for scanned documents
-
-- [x] **Phase 4: Multi-Page Document Management & PDF Synthesis**
-  - [x] Local metadata repository for document cataloging:
-    - [x] Documents, pages, tags, creation timestamps, raw and processed paths
-  - [x] Document Organizer:
-    - [x] Multi-page document viewer with interactive zoom & pan
-    - [x] Page reordering, rotation (90° clockwise), and re-cropping
-    - [x] Tagging and search filtering
-  - [x] PDF Generation:
-    - [x] Clean multi-page PDF compilation with `package:pdf`
-    - [x] Direct export and system share sheet via `package:printing`
-
-- [x] **Phase 5: User Interface, Polish & Verification**
-  - [x] ClearScan Deep Midnight & Neon Cyan Material 3 Theme
-  - [x] Fully responsive layout for phones, tablets, and desktop
-  - [x] Comprehensive test suite (10/10 passing unit & widget tests)
-  - [x] Verified Linux desktop compilation (`build/linux/x64/debug/bundle/cam_scan`)
-  - [x] Verified Android APK compilation (`build/app/outputs/flutter-apk/app-debug.apk`)
+- [ ] Optional on-device LLM (e.g. Gemma via MediaPipe / `flutter_gemma`) for summaries and Q&A, with the same grounding check on its output (values must appear in the OCR text)
+- [ ] Arabic OCR (not supported by ML Kit; would need e.g. Tesseract `ara` data)
+- [ ] Handwriting recognition (ML Kit Digital Ink is for strokes, not photos)
+- [ ] Per-page re-ordering directly from the document viewer (currently via "Edit pages")

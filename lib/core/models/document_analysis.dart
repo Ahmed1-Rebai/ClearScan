@@ -1,4 +1,4 @@
-/// Extended document categories identified by ClearScan on-device intelligence.
+/// Document categories identified by ClearScan's on-device analysis.
 enum DocumentType {
   receipt,
   invoice,
@@ -9,6 +9,7 @@ enum DocumentType {
   taxDocument,
   medicalPrescription,
   certificate,
+  academic,
   notes,
   whiteboard,
   book,
@@ -36,8 +37,10 @@ extension DocumentTypeExtension on DocumentType {
         return 'Medical / Prescription';
       case DocumentType.certificate:
         return 'Certificate / Diploma';
+      case DocumentType.academic:
+        return 'Course / Exercise Sheet';
       case DocumentType.notes:
-        return 'Handwritten Notes';
+        return 'Notes';
       case DocumentType.whiteboard:
         return 'Whiteboard';
       case DocumentType.book:
@@ -46,6 +49,12 @@ extension DocumentTypeExtension on DocumentType {
         return 'Document';
     }
   }
+
+  bool get isFinancial =>
+      this == DocumentType.invoice ||
+      this == DocumentType.receipt ||
+      this == DocumentType.bankStatement ||
+      this == DocumentType.taxDocument;
 }
 
 /// A structured line item (e.g. from an invoice or receipt table).
@@ -77,18 +86,23 @@ class DocumentLineItem {
       );
 }
 
-/// A structured key-value field extracted from document text.
+/// A key-value field extracted from the document text.
+///
+/// [value] is always copied verbatim from the OCR text and [evidence] is the
+/// full source line it was read from, so every field can be traced back.
 class ExtractedField {
   final String key;
   final String value;
   final double confidence;
   final String? category; // 'financial', 'identity', 'date', 'contact', 'legal'
+  final String? evidence;
 
   const ExtractedField({
     required this.key,
     required this.value,
     this.confidence = 1.0,
     this.category,
+    this.evidence,
   });
 
   Map<String, dynamic> toJson() => {
@@ -96,6 +110,7 @@ class ExtractedField {
         'value': value,
         'confidence': confidence,
         'category': category,
+        if (evidence != null) 'evidence': evidence,
       };
 
   factory ExtractedField.fromJson(Map<String, dynamic> json) => ExtractedField(
@@ -103,11 +118,12 @@ class ExtractedField {
         value: json['value'] as String,
         confidence: (json['confidence'] as num?)?.toDouble() ?? 1.0,
         category: json['category'] as String?,
+        evidence: json['evidence'] as String?,
       );
 }
 
-/// Comprehensive on-device analysis produced by Gemma.
-class GemmaDocumentAnalysis {
+/// On-device analysis of a document's OCR text.
+class DocumentAnalysis {
   final DocumentType documentType;
   final String summary;
   final List<ExtractedField> extractedFields;
@@ -117,8 +133,10 @@ class GemmaDocumentAnalysis {
   final String rawOcrText;
   final DateTime analyzedAt;
   final String modelName;
+  final String? language;
+  final List<String> warnings;
 
-  GemmaDocumentAnalysis({
+  DocumentAnalysis({
     required this.documentType,
     required this.summary,
     required this.extractedFields,
@@ -127,7 +145,9 @@ class GemmaDocumentAnalysis {
     this.suggestedAction,
     required this.rawOcrText,
     DateTime? analyzedAt,
-    this.modelName = 'Gemma 2B (On-Device)',
+    this.modelName = 'On-device rule-based extractor',
+    this.language,
+    this.warnings = const [],
   }) : analyzedAt = analyzedAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -140,10 +160,12 @@ class GemmaDocumentAnalysis {
         'rawOcrText': rawOcrText,
         'analyzedAt': analyzedAt.toIso8601String(),
         'modelName': modelName,
+        if (language != null) 'language': language,
+        if (warnings.isNotEmpty) 'warnings': warnings,
       };
 
-  factory GemmaDocumentAnalysis.fromJson(Map<String, dynamic> json) {
-    return GemmaDocumentAnalysis(
+  factory DocumentAnalysis.fromJson(Map<String, dynamic> json) {
+    return DocumentAnalysis(
       documentType: DocumentType.values.firstWhere(
         (e) => e.name == json['documentType'],
         orElse: () => DocumentType.other,
@@ -157,16 +179,13 @@ class GemmaDocumentAnalysis {
               ?.map((item) => DocumentLineItem.fromJson(item as Map<String, dynamic>))
               .toList() ??
           [],
-      keyPoints: (json['keyPoints'] as List<dynamic>?)
-              ?.map((p) => p.toString())
-              .toList() ??
-          [],
+      keyPoints: (json['keyPoints'] as List<dynamic>?)?.map((p) => p.toString()).toList() ?? [],
       suggestedAction: json['suggestedAction'] as String?,
       rawOcrText: json['rawOcrText'] as String? ?? '',
-      analyzedAt: json['analyzedAt'] != null
-          ? DateTime.parse(json['analyzedAt'] as String)
-          : DateTime.now(),
-      modelName: json['modelName'] as String? ?? 'Gemma 2B (On-Device)',
+      analyzedAt: json['analyzedAt'] != null ? DateTime.parse(json['analyzedAt'] as String) : DateTime.now(),
+      modelName: json['modelName'] as String? ?? 'On-device rule-based extractor',
+      language: json['language'] as String?,
+      warnings: (json['warnings'] as List<dynamic>?)?.map((w) => w.toString()).toList() ?? const [],
     );
   }
 }

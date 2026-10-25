@@ -47,6 +47,10 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>ClearScan uses the camera to scan documents. Photos stay on your device.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ClearScan imports photos of documents you choose. They stay on your device.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

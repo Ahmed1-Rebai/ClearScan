@@ -1,5 +1,9 @@
 import 'dart:ui';
 import 'package:uuid/uuid.dart';
+import 'document_analysis.dart';
+import 'ocr_line.dart';
+
+export 'ocr_line.dart';
 
 /// Available document enhancement filters.
 enum ScanFilterType {
@@ -35,7 +39,37 @@ class DocumentCorners {
     );
   }
 
+  factory DocumentCorners.fullImage(double width, double height) {
+    return DocumentCorners(
+      topLeft: Offset.zero,
+      topRight: Offset(width, 0),
+      bottomRight: Offset(width, height),
+      bottomLeft: Offset(0, height),
+    );
+  }
+
+  factory DocumentCorners.fromList(List<Offset> pts) {
+    return DocumentCorners(topLeft: pts[0], topRight: pts[1], bottomRight: pts[2], bottomLeft: pts[3]);
+  }
+
   List<Offset> toList() => [topLeft, topRight, bottomRight, bottomLeft];
+
+  DocumentCorners scale(double sx, double sy) {
+    return DocumentCorners.fromList(toList().map((p) => Offset(p.dx * sx, p.dy * sy)).toList());
+  }
+
+  /// True when the quad is a simple convex polygon in clockwise order, i.e. safe to warp.
+  bool get isConvex {
+    final pts = toList();
+    for (int i = 0; i < 4; i++) {
+      final a = pts[i];
+      final b = pts[(i + 1) % 4];
+      final c = pts[(i + 2) % 4];
+      final cross = (b.dx - a.dx) * (c.dy - b.dy) - (b.dy - a.dy) * (c.dx - b.dx);
+      if (cross <= 0) return false;
+    }
+    return true;
+  }
 
   DocumentCorners copyWith({
     Offset? topLeft,
@@ -81,6 +115,9 @@ class DocumentCorners {
 }
 
 /// Represents a single page within a multi-page document.
+///
+/// The processed image is always derived from [rawImagePath] by warping with
+/// [corners], rotating by [rotationDegrees] (clockwise) and applying [filterType].
 class ScannedPage {
   final String id;
   final String rawImagePath;
@@ -89,7 +126,11 @@ class ScannedPage {
   final ScanFilterType filterType;
   final int rotationDegrees; // 0, 90, 180, 270
   final DateTime createdAt;
+
+  /// Null until OCR has run; empty when OCR found no text.
   final String? ocrText;
+  final List<OcrLine> ocrLines;
+  final double? ocrConfidence;
 
   ScannedPage({
     String? id,
@@ -100,9 +141,16 @@ class ScannedPage {
     this.rotationDegrees = 0,
     DateTime? createdAt,
     this.ocrText,
+    this.ocrLines = const [],
+    this.ocrConfidence,
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
 
+  bool get hasOcr => ocrText != null;
+
+  String get displayImagePath => processedImagePath ?? rawImagePath;
+
+  /// Use [clearOcr] whenever the processed image changes, since old text boxes no longer match.
   ScannedPage copyWith({
     String? rawImagePath,
     String? processedImagePath,
@@ -110,6 +158,9 @@ class ScannedPage {
     ScanFilterType? filterType,
     int? rotationDegrees,
     String? ocrText,
+    List<OcrLine>? ocrLines,
+    double? ocrConfidence,
+    bool clearOcr = false,
   }) {
     return ScannedPage(
       id: id,
@@ -119,7 +170,9 @@ class ScannedPage {
       filterType: filterType ?? this.filterType,
       rotationDegrees: rotationDegrees ?? this.rotationDegrees,
       createdAt: createdAt,
-      ocrText: ocrText ?? this.ocrText,
+      ocrText: clearOcr ? ocrText : (ocrText ?? this.ocrText),
+      ocrLines: clearOcr ? (ocrLines ?? const []) : (ocrLines ?? this.ocrLines),
+      ocrConfidence: clearOcr ? ocrConfidence : (ocrConfidence ?? this.ocrConfidence),
     );
   }
 
@@ -132,6 +185,8 @@ class ScannedPage {
         'rotationDegrees': rotationDegrees,
         'createdAt': createdAt.toIso8601String(),
         'ocrText': ocrText,
+        if (ocrLines.isNotEmpty) 'ocrLines': ocrLines.map((l) => l.toJson()).toList(),
+        if (ocrConfidence != null) 'ocrConfidence': ocrConfidence,
       };
 
   factory ScannedPage.fromJson(Map<String, dynamic> json) {
@@ -149,6 +204,11 @@ class ScannedPage {
       rotationDegrees: (json['rotationDegrees'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.parse(json['createdAt'] as String),
       ocrText: json['ocrText'] as String?,
+      ocrLines: (json['ocrLines'] as List<dynamic>?)
+              ?.map((l) => OcrLine.fromJson(l as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      ocrConfidence: (json['ocrConfidence'] as num?)?.toDouble(),
     );
   }
 }
@@ -161,7 +221,9 @@ class ScannedDocument {
   final List<String> tags;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final Map<String, dynamic>? gemmaMetadata;
+
+  /// Cached analysis of the combined OCR text; null until every page has OCR.
+  final DocumentAnalysis? analysis;
 
   ScannedDocument({
     String? id,
@@ -170,7 +232,7 @@ class ScannedDocument {
     List<String>? tags,
     DateTime? createdAt,
     DateTime? updatedAt,
-    this.gemmaMetadata,
+    this.analysis,
   })  : id = id ?? const Uuid().v4(),
         tags = tags ?? [],
         createdAt = createdAt ?? DateTime.now(),
@@ -178,15 +240,32 @@ class ScannedDocument {
 
   int get pageCount => pages.length;
 
-  String? get previewImagePath =>
-      pages.isNotEmpty ? (pages.first.processedImagePath ?? pages.first.rawImagePath) : null;
+  String? get previewImagePath => pages.isNotEmpty ? pages.first.displayImagePath : null;
+
+  bool get isFullyRecognized => pages.isNotEmpty && pages.every((p) => p.hasOcr);
+
+  /// All pages' OCR text, separated by page markers when there is more than one page.
+  String get combinedText {
+    final recognized = pages.where((p) => (p.ocrText ?? '').trim().isNotEmpty).toList();
+    if (recognized.length <= 1) return recognized.isEmpty ? '' : recognized.first.ocrText!.trim();
+    final buffer = StringBuffer();
+    for (int i = 0; i < pages.length; i++) {
+      final text = pages[i].ocrText?.trim() ?? '';
+      if (text.isEmpty) continue;
+      if (buffer.isNotEmpty) buffer.write('\n\n');
+      buffer.write('--- Page ${i + 1} ---\n');
+      buffer.write(text);
+    }
+    return buffer.toString();
+  }
 
   ScannedDocument copyWith({
     String? title,
     List<ScannedPage>? pages,
     List<String>? tags,
     DateTime? updatedAt,
-    Map<String, dynamic>? gemmaMetadata,
+    DocumentAnalysis? analysis,
+    bool clearAnalysis = false,
   }) {
     return ScannedDocument(
       id: id,
@@ -195,7 +274,7 @@ class ScannedDocument {
       tags: tags ?? this.tags,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
-      gemmaMetadata: gemmaMetadata ?? this.gemmaMetadata,
+      analysis: clearAnalysis ? analysis : (analysis ?? this.analysis),
     );
   }
 
@@ -206,7 +285,7 @@ class ScannedDocument {
         'tags': tags,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
-        'gemmaMetadata': gemmaMetadata,
+        if (analysis != null) 'analysis': analysis!.toJson(),
       };
 
   factory ScannedDocument.fromJson(Map<String, dynamic> json) {
@@ -219,7 +298,9 @@ class ScannedDocument {
       tags: (json['tags'] as List<dynamic>?)?.map((t) => t.toString()).toList() ?? [],
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
-      gemmaMetadata: json['gemmaMetadata'] as Map<String, dynamic>?,
+      analysis: json['analysis'] != null
+          ? DocumentAnalysis.fromJson(json['analysis'] as Map<String, dynamic>)
+          : null,
     );
   }
 }

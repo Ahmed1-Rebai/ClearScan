@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/models/document.dart';
 
-/// CustomPainter for rendering interactive 4-corner document cropping overlay.
+/// Paints the interactive 4-corner crop overlay (corners in display coordinates).
 class PolygonCropperPainter extends CustomPainter {
   final DocumentCorners corners;
   final int? activeCornerIndex;
@@ -17,7 +17,6 @@ class PolygonCropperPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final List<Offset> pts = corners.toList();
 
-    // 1. Dim the exterior area outside the document
     final Path fullPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
     final Path docPath = Path()
       ..moveTo(pts[0].dx, pts[0].dy)
@@ -26,72 +25,47 @@ class PolygonCropperPainter extends CustomPainter {
       ..lineTo(pts[3].dx, pts[3].dy)
       ..close();
 
-    final Path dimPath = Path.combine(PathOperation.difference, fullPath, docPath);
-    canvas.drawPath(dimPath, Paint()..color = Colors.black.withOpacity(0.55));
+    canvas.drawPath(
+      Path.combine(PathOperation.difference, fullPath, docPath),
+      Paint()..color = Colors.black.withValues(alpha: 0.55),
+    );
 
-    // 2. Draw 3x3 internal perspective alignment grid
     final Paint gridPaint = Paint()
-      ..color = primaryColor.withOpacity(0.25)
+      ..color = primaryColor.withValues(alpha: 0.25)
       ..strokeWidth = 1.0;
-
     for (int i = 1; i <= 2; i++) {
       final double t = i / 3.0;
-      // Horizontal grid lines
-      final Offset left = Offset.lerp(pts[0], pts[3], t)!;
-      final Offset right = Offset.lerp(pts[1], pts[2], t)!;
-      canvas.drawLine(left, right, gridPaint);
-
-      // Vertical grid lines
-      final Offset top = Offset.lerp(pts[0], pts[1], t)!;
-      final Offset bottom = Offset.lerp(pts[3], pts[2], t)!;
-      canvas.drawLine(top, bottom, gridPaint);
+      canvas.drawLine(Offset.lerp(pts[0], pts[3], t)!, Offset.lerp(pts[1], pts[2], t)!, gridPaint);
+      canvas.drawLine(Offset.lerp(pts[0], pts[1], t)!, Offset.lerp(pts[3], pts[2], t)!, gridPaint);
     }
 
-    // 3. Draw Document Bounding Quad Lines
-    final Paint borderPaint = Paint()
-      ..color = primaryColor
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(docPath, borderPaint);
+    canvas.drawPath(
+      docPath,
+      Paint()
+        ..color = primaryColor
+        ..strokeWidth = 2.5
+        ..style = PaintingStyle.stroke,
+    );
 
-    // 4. Draw Corner Handles & Midpoints
-    final Paint handleFill = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
+    final Paint handleFill = Paint()..color = Colors.white;
     final Paint handleBorder = Paint()
       ..color = primaryColor
       ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke;
-
-    final Paint activeHandleFill = Paint()
-      ..color = primaryColor
-      ..style = PaintingStyle.fill;
+    final Paint activeHandleFill = Paint()..color = primaryColor;
 
     for (int i = 0; i < 4; i++) {
       final pt = pts[i];
       final bool isActive = activeCornerIndex == i;
-
-      // Outer glow/shadow
-      canvas.drawCircle(pt, isActive ? 16 : 12, Paint()..color = Colors.black.withOpacity(0.35));
-
-      // Handle circle
+      canvas.drawCircle(pt, isActive ? 16 : 12, Paint()..color = Colors.black.withValues(alpha: 0.35));
       canvas.drawCircle(pt, isActive ? 14 : 10, isActive ? activeHandleFill : handleFill);
       canvas.drawCircle(pt, isActive ? 14 : 10, handleBorder);
-
-      // Inner dot
       canvas.drawCircle(pt, 3.5, Paint()..color = isActive ? Colors.white : primaryColor);
     }
 
-    // Draw edge midpoint indicators
-    final Paint midPointPaint = Paint()
-      ..color = primaryColor.withOpacity(0.8)
-      ..style = PaintingStyle.fill;
-
+    final Paint midPointPaint = Paint()..color = primaryColor.withValues(alpha: 0.8);
     for (int i = 0; i < 4; i++) {
-      final int next = (i + 1) % 4;
-      final Offset mid = Offset.lerp(pts[i], pts[next], 0.5)!;
-      canvas.drawCircle(mid, 5.0, midPointPaint);
+      canvas.drawCircle(Offset.lerp(pts[i], pts[(i + 1) % 4], 0.5)!, 5.0, midPointPaint);
     }
   }
 
@@ -102,4 +76,3 @@ class PolygonCropperPainter extends CustomPainter {
         oldDelegate.primaryColor != primaryColor;
   }
 }
-

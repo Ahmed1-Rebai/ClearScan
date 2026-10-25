@@ -26,9 +26,12 @@ class MagnifierLoupe extends StatelessWidget {
     final double loupeX = position.dx - loupeRadius;
     final double loupeY = position.dy - loupeRadius * 2.3;
 
+    // Upper bounds never drop below the lower bound, even for tiny display sizes.
+    final maxLeft = (displaySize.width - loupeRadius * 2 - 10).clamp(10.0, double.infinity);
+    final maxTop = (displaySize.height - loupeRadius * 2 - 10).clamp(10.0, double.infinity);
     return Positioned(
-      left: loupeX.clamp(10.0, displaySize.width - loupeRadius * 2 - 10),
-      top: loupeY.clamp(10.0, displaySize.height - loupeRadius * 2 - 10),
+      left: loupeX.clamp(10.0, maxLeft),
+      top: loupeY.clamp(10.0, maxTop),
       child: Container(
         width: loupeRadius * 2,
         height: loupeRadius * 2,
@@ -38,7 +41,7 @@ class MagnifierLoupe extends StatelessWidget {
           border: Border.all(color: const Color(0xFF00E5FF), width: 2.5),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.4),
+              color: Colors.black.withValues(alpha: 0.4),
               blurRadius: 10,
               spreadRadius: 2,
             ),

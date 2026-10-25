@@ -1,4 +1,12 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Everything runs on-device. Removing network access (declared by ML Kit's
+         usage-logging library) guarantees no data can leave the phone in release
+         builds. Debug builds re-add INTERNET for Flutter tooling. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <!-- Declared by the camera plugin; this app never records audio. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
     <application
         android:label="ClearScan"
         android:name="${applicationName}"

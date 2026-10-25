@@ -1,30 +1,42 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
-import '../../core/models/document.dart';
 import '../../core/storage/document_repository.dart';
-import 'crop_screen.dart';
+import '../gallery_import.dart';
+import '../widgets/page_image.dart';
+import 'scan_review_screen.dart';
 
+/// Captures one or more pages.
+///
+/// - Default: opens [ScanReviewScreen] for a new document (or for [targetDocumentId]).
+/// - [returnCaptures]: pops with the captured raw image paths instead (used by an open review).
 class CameraScreen extends StatefulWidget {
-  final ScannedDocument? targetDocument;
+  final String? targetDocumentId;
+  final bool returnCaptures;
 
-  const CameraScreen({super.key, this.targetDocument});
+  const CameraScreen({super.key, this.targetDocumentId, this.returnCaptures = false});
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
 class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
-  CameraController? _cameraController;
-  List<CameraDescription> _cameras = [];
-  bool _isCameraInitialized = false;
-  bool _isBatchMode = false;
-  final List<ScannedPage> _batchPages = [];
-  bool _isCapturing = false;
-  FlashMode _flashMode = FlashMode.off;
+  CameraController? _controller;
+  bool _initializing = true;
+  String? _cameraError;
+  bool _batchMode = true;
+  bool _shutterBusy = false;
+  bool _finishing = false;
+  FlashMode _flash = FlashMode.off;
+  Offset? _focusPoint;
+
+  /// Captures in shutter order; imports finish asynchronously and fill their slot.
+  final List<String?> _slots = [];
+  final List<Future<void>> _pending = [];
+
+  List<String> get _captured => _slots.whereType<String>().toList();
 
   @override
   void initState() {
@@ -36,280 +48,415 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _cameraController?.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
-  Future<void> _initCamera() async {
-    try {
-      _cameras = await availableCameras();
-      if (_cameras.isNotEmpty) {
-        _cameraController = CameraController(
-          _cameras.first,
-          ResolutionPreset.veryHigh,
-          enableAudio: false,
-        );
-        await _cameraController!.initialize();
-        if (mounted) setState(() => _isCameraInitialized = true);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = _controller;
+    if (state == AppLifecycleState.inactive) {
+      if (controller != null) {
+        _controller = null;
+        controller.dispose();
+        if (mounted) setState(() {});
       }
-    } catch (_) {
-      // Desktop / emulator without camera fallback
-      if (mounted) setState(() => _isCameraInitialized = false);
+    } else if (state == AppLifecycleState.resumed && _controller == null) {
+      _initCamera();
     }
   }
 
-  Future<void> _capturePhoto() async {
-    if (_isCapturing) return;
-
-    setState(() => _isCapturing = true);
-
-    Uint8List? imageBytes;
-    if (_cameraController != null && _cameraController!.value.isInitialized) {
+  Future<void> _initCamera() async {
+    setState(() {
+      _initializing = true;
+      _cameraError = null;
+    });
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) throw CameraException('NoCamera', 'No camera found on this device.');
+      final back = cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.back, orElse: () => cameras.first);
+      // Full sensor resolution: small print needs every pixel for good OCR.
+      final controller = CameraController(back, ResolutionPreset.max, enableAudio: false, imageFormatGroup: ImageFormatGroup.jpeg);
+      await controller.initialize();
       try {
-        final xfile = await _cameraController!.takePicture();
-        imageBytes = await xfile.readAsBytes();
+        await controller.setFlashMode(_flash);
+        await controller.setFocusMode(FocusMode.auto);
       } catch (_) {}
-    }
-
-    // Fallback sample document if no camera available (e.g. desktop/simulator)
-    imageBytes ??= _generateSampleDocumentImage();
-
-    final rawPath = await DocumentRepository.instance.saveRawPageImage(imageBytes);
-    final page = ScannedPage(rawImagePath: rawPath);
-
-    setState(() => _isCapturing = false);
-
-    if (_isBatchMode) {
-      setState(() => _batchPages.add(page));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Captured page ${_batchPages.length}!'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-    } else {
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() {
+        _controller = controller;
+        _initializing = false;
+      });
+    } on CameraException catch (e) {
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CropScreen(
-              page: page,
-              parentDocument: widget.targetDocument,
-            ),
-          ),
-        );
+        setState(() {
+          _initializing = false;
+          _cameraError = e.code == 'CameraAccessDenied' || e.code == 'CameraAccessDeniedWithoutPrompt'
+              ? 'Camera permission was denied. Allow camera access in Settings, or import photos instead.'
+              : 'The camera is not available. You can import photos instead.';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _initializing = false;
+          _cameraError = 'The camera is not available. You can import photos instead.';
+        });
       }
     }
+  }
+
+  Future<void> _capture() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized || _shutterBusy || _finishing) return;
+    setState(() => _shutterBusy = true);
+    try {
+      final shot = await controller.takePicture();
+      final bytes = await shot.readAsBytes();
+      unawaited(File(shot.path).delete().then((_) {}, onError: (_) {}));
+      _store(bytes);
+      if (mounted) setState(() => _shutterBusy = false);
+      if (!_batchMode) await _finish();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _shutterBusy = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not take the picture. Please try again.')));
+      }
+    }
+  }
+
+  void _store(Uint8List bytes) {
+    final slot = _slots.length;
+    _slots.add(null);
+    _pending.add(
+      DocumentRepository.instance
+          .importImageBytes(bytes)
+          .then(
+            (path) {
+              _slots[slot] = path;
+              if (mounted) setState(() {});
+            },
+            onError: (Object _) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A photo could not be saved.')));
+              }
+            },
+          ),
+    );
   }
 
   Future<void> _importFromGallery() async {
-    final files = await FilePicker.pickFiles(
-      type: FileType.image,
-    );
+    final paths = await importImagesFromGallery(context);
+    if (!mounted || paths.isEmpty) return;
+    setState(() => _slots.addAll(paths));
+    if (!_batchMode) await _finish();
+  }
 
-    if (files.isNotEmpty) {
-      for (final file in files) {
-        if (file.path != null) {
-          final bytes = await File(file.path!).readAsBytes();
-          final rawPath = await DocumentRepository.instance.saveRawPageImage(bytes);
-          final page = ScannedPage(rawImagePath: rawPath);
-
-          if (_isBatchMode) {
-            _batchPages.add(page);
-          } else {
-            if (mounted) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => CropScreen(
-                    page: page,
-                    parentDocument: widget.targetDocument,
-                  ),
-                ),
-              );
-              return;
-            }
-          }
-        }
-      }
-      if (_isBatchMode && mounted) {
-        setState(() {});
-      }
+  Future<void> _finish() async {
+    if (_finishing) return;
+    setState(() => _finishing = true);
+    await Future.wait(_pending);
+    if (!mounted) return;
+    final captured = _captured;
+    if (captured.isEmpty) {
+      setState(() => _finishing = false);
+      return;
+    }
+    if (widget.returnCaptures) {
+      Navigator.pop(context, captured);
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ScanReviewScreen(documentId: widget.targetDocumentId, newRawPaths: captured),
+        ),
+      );
     }
   }
 
-  void _finishBatch() {
-    if (_batchPages.isEmpty) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CropScreen(
-          page: _batchPages.first,
-          parentDocument: widget.targetDocument,
-        ),
+  Future<void> _confirmClose() async {
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard captured pages?'),
+        content: Text('${_slots.length} page${_slots.length == 1 ? '' : 's'} will be deleted.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep scanning')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Discard')),
+        ],
       ),
     );
+    if (discard != true) return;
+    await Future.wait(_pending);
+    await DocumentRepository.instance.deleteFiles(_captured);
+    _slots.clear();
+    if (mounted) Navigator.pop(context);
   }
 
-  Uint8List _generateSampleDocumentImage() {
-    // Generates a simulated realistic scanned invoice document
-    final doc = img.Image(width: 800, height: 1100);
-    img.fill(doc, color: img.ColorRgb8(245, 245, 245));
+  Future<void> _toggleFlash() async {
+    final controller = _controller;
+    if (controller == null) return;
+    final next = _flash == FlashMode.torch ? FlashMode.off : FlashMode.torch;
+    try {
+      await controller.setFlashMode(next);
+      setState(() => _flash = next);
+    } catch (_) {}
+  }
 
-    // Simulated header
-    for (int y = 80; y < 140; y++) {
-      for (int x = 80; x < 720; x++) {
-        if (y < 95 || y > 125 || x < 300) {
-          doc.setPixelRgba(x, y, 30, 40, 50, 255);
-        }
-      }
-    }
-
-    // Simulated invoice rows
-    for (int row = 0; row < 12; row++) {
-      final int y = 220 + row * 65;
-      for (int h = 0; h < 14; h++) {
-        for (int x = 80; x < 720; x++) {
-          if ((x > 80 && x < 400) || (x > 500 && x < 720)) {
-            doc.setPixelRgba(x, y + h, 50, 50, 50, 255);
-          }
-        }
-      }
-    }
-
-    // Red seal stamp at bottom right
-    for (int y = 920; y < 1020; y++) {
-      for (int x = 550; x < 650; x++) {
-        final double dist = (x - 600) * (x - 600) + (y - 970) * (y - 970) + 0.0;
-        if (dist > 1800 && dist < 2200) {
-          doc.setPixelRgba(x, y, 220, 40, 40, 255);
-        }
-      }
-    }
-
-    return Uint8List.fromList(img.encodeJpg(doc, quality: 90));
+  Future<void> _focusAt(TapDownDetails details, BoxConstraints box) async {
+    final controller = _controller;
+    if (controller == null) return;
+    final point = Offset(
+      (details.localPosition.dx / box.maxWidth).clamp(0.0, 1.0),
+      (details.localPosition.dy / box.maxHeight).clamp(0.0, 1.0),
+    );
+    setState(() => _focusPoint = details.localPosition);
+    try {
+      await controller.setFocusPoint(point);
+      await controller.setExposurePoint(point);
+    } catch (_) {}
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _focusPoint = null);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
-        title: Text(_isBatchMode ? 'Batch Scan (${_batchPages.length})' : 'Single Scan'),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _flashMode == FlashMode.torch ? Icons.flash_on : Icons.flash_off,
-              color: _flashMode == FlashMode.torch ? Colors.amber : Colors.white,
-            ),
-            onPressed: () async {
-              if (_cameraController != null && _cameraController!.value.isInitialized) {
-                final next = _flashMode == FlashMode.torch ? FlashMode.off : FlashMode.torch;
-                await _cameraController!.setFlashMode(next);
-                setState(() => _flashMode = next);
-              }
-            },
-          ),
-          TextButton(
-            onPressed: () => setState(() => _isBatchMode = !_isBatchMode),
-            child: Text(
-              _isBatchMode ? 'Single' : 'Batch',
-              style: const TextStyle(color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (_isCameraInitialized && _cameraController != null)
-            CameraPreview(_cameraController!)
-          else
-            Container(
-              color: const Color(0xFF0B0F19),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.document_scanner, size: 72, color: const Color(0xFF00E5FF).withOpacity(0.8)),
-                    const SizedBox(height: 16),
-                    const Text('Document Viewfinder Ready', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    const Text('Tap the shutter to capture or import from gallery', style: TextStyle(color: Colors.white54, fontSize: 13)),
-                  ],
-                ),
-              ),
-            ),
+    const accent = Color(0xFF00E5FF);
+    final count = _slots.length;
 
-          // Document Guide Viewfinder Frame
-          Center(
-            child: Container(
-              margin: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.6), width: 2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-
-          // Bottom Shutter Controls
-          Positioned(
-            bottom: 30,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // Gallery button
-                IconButton(
-                  icon: const Icon(Icons.photo_library, color: Colors.white, size: 30),
-                  onPressed: _importFromGallery,
-                ),
-
-                // Shutter Button
-                GestureDetector(
-                  onTap: _isCapturing ? null : _capturePhoto,
-                  child: Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 4),
-                      color: Colors.transparent,
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(0xFF00E5FF),
-                      ),
-                      child: _isCapturing
-                          ? const Center(child: CircularProgressIndicator(strokeWidth: 3, color: Colors.black))
-                          : null,
+    return PopScope(
+      canPop: _slots.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmClose();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        // Every child is positioned and the box is expanded, so the stack fills the
+        // screen (a non-positioned top bar would shrink it to the bar's height).
+        body: SizedBox.expand(
+          child: Stack(
+            children: [
+              Positioned.fill(child: _buildPreview(accent)),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          tooltip: 'Close',
+                          onPressed: () => Navigator.maybePop(context),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(
+                            _flash == FlashMode.torch ? Icons.flash_on : Icons.flash_off,
+                            color: _flash == FlashMode.torch ? Colors.amber : Colors.white,
+                          ),
+                          tooltip: 'Torch',
+                          onPressed: _controller == null ? null : _toggleFlash,
+                        ),
+                        Flexible(
+                          flex: 3,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () => setState(() => _batchMode = !_batchMode),
+                              icon: Icon(_batchMode ? Icons.burst_mode_outlined : Icons.crop_portrait, color: accent),
+                              label: Text(
+                                _batchMode ? 'Multi-page' : 'Single page',
+                                style: const TextStyle(color: accent, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-
-                // Finish batch button or placeholder
-                if (_isBatchMode && _batchPages.isNotEmpty)
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00E5FF),
-                      foregroundColor: Colors.black,
-                      shape: const CircleBorder(),
-                      padding: const EdgeInsets.all(16),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 20, top: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.photo_library_outlined, color: Colors.white, size: 30),
+                          tooltip: 'Import from gallery',
+                          onPressed: _finishing ? null : _importFromGallery,
+                        ),
+                        _ShutterButton(busy: _shutterBusy, onTap: _controller == null || _finishing ? null : _capture),
+                        SizedBox(
+                          width: 64,
+                          height: 64,
+                          child: count == 0
+                              ? null
+                              : _DoneButton(
+                                  count: count,
+                                  lastPath: _captured.isEmpty ? null : _captured.last,
+                                  busy: _finishing,
+                                  onTap: _finish,
+                                ),
+                        ),
+                      ],
                     ),
-                    onPressed: _finishBatch,
-                    child: Text('${_batchPages.length}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  )
-                else
-                  const SizedBox(width: 48),
-              ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreview(Color accent) {
+    final controller = _controller;
+    if (controller != null && controller.value.isInitialized) {
+      return Center(
+        child: CameraPreview(
+          controller,
+          child: LayoutBuilder(
+            builder: (context, box) => GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (d) => _focusAt(d, box),
+              child: Stack(
+                children: [
+                  if (_focusPoint != null)
+                    Positioned(
+                      left: _focusPoint!.dx - 28,
+                      top: _focusPoint!.dy - 28,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: accent, width: 2),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-        ],
+        ),
+      );
+    }
+    if (_initializing) return Center(child: CircularProgressIndicator(color: accent));
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.no_photography_outlined, size: 64, color: accent.withValues(alpha: 0.8)),
+            const SizedBox(height: 16),
+            Text(
+              _cameraError ?? 'The camera is not available.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _importFromGallery,
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Import photos'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShutterButton extends StatelessWidget {
+  final bool busy;
+  final VoidCallback? onTap;
+
+  const _ShutterButton({required this.busy, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: busy ? null : onTap,
+      child: Container(
+        width: 76,
+        height: 76,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: onTap == null ? Colors.white38 : Colors.white, width: 4),
+        ),
+        child: Container(
+          decoration: BoxDecoration(shape: BoxShape.circle, color: onTap == null ? Colors.white24 : const Color(0xFF00E5FF)),
+          child: busy ? const Center(child: CircularProgressIndicator(strokeWidth: 3, color: Colors.black)) : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _DoneButton extends StatelessWidget {
+  final int count;
+  final String? lastPath;
+  final bool busy;
+  final VoidCallback onTap;
+
+  const _DoneButton({required this.count, required this.lastPath, required this.busy, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Review $count page${count == 1 ? '' : 's'}',
+      child: GestureDetector(
+        onTap: busy ? null : onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: lastPath == null || busy
+                    ? const Center(
+                        child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                      )
+                    : PageImage(path: lastPath!, fit: BoxFit.cover, cacheWidth: 160),
+              ),
+            ),
+            Positioned(
+              right: -6,
+              top: -6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(color: const Color(0xFF00E5FF), borderRadius: BorderRadius.circular(12)),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

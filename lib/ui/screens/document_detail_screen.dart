@@ -1,443 +1,378 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../core/ocr/ocr_service.dart';
 import '../../core/models/document.dart';
 import '../../core/storage/document_repository.dart';
 import '../../core/storage/pdf_service.dart';
-import 'crop_screen.dart';
-import 'gemma_insights_screen.dart';
+import '../widgets/page_image.dart';
+import 'camera_screen.dart';
+import 'insights_screen.dart';
+import 'scan_review_screen.dart';
 
 class DocumentDetailScreen extends StatefulWidget {
-  final ScannedDocument document;
+  final String documentId;
 
-  const DocumentDetailScreen({super.key, required this.document});
+  const DocumentDetailScreen({super.key, required this.documentId});
 
   @override
   State<DocumentDetailScreen> createState() => _DocumentDetailScreenState();
 }
 
 class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
-  late ScannedDocument _doc;
-  int _currentPageIndex = 0;
-  bool _isGeneratingPdf = false;
+  final PageController _pager = PageController();
+  final DocumentRepository _repo = DocumentRepository.instance;
+  int _current = 0;
+  bool _exporting = false;
 
   @override
   void initState() {
     super.initState();
-    _doc = widget.document;
+    // After the first frame: starting OCR notifies listeners, which must not happen during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final doc = _repo.byId(widget.documentId);
+      if (doc == null) return;
+      if (!doc.isFullyRecognized && OcrService.instance.isAvailable) {
+        OcrService.instance.processDocument(doc.id);
+      } else if (doc.isFullyRecognized && doc.analysis == null) {
+        OcrService.instance.refreshAnalysis(doc.id);
+      }
+    });
   }
 
-  Future<void> _renameDocument() async {
-    final theme = Theme.of(context);
-    final primaryColor = theme.colorScheme.primary;
-    final controller = TextEditingController(text: _doc.title);
+  @override
+  void dispose() {
+    _pager.dispose();
+    super.dispose();
+  }
 
-    final newTitle = await showDialog<String>(
+  void _jumpTo(int index) {
+    setState(() => _current = index);
+    if (_pager.hasClients) _pager.animateToPage(index, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+  }
+
+  Future<void> _rename(ScannedDocument doc) async {
+    final controller = TextEditingController(text: doc.title);
+    final title = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: theme.colorScheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Rename Document',
-          style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Rename document'),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Document Title'),
+          decoration: const InputDecoration(labelText: 'Title'),
+          onSubmitted: (v) => Navigator.pop(context, v.trim()),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.6))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              foregroundColor: theme.colorScheme.onPrimary,
-            ),
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save')),
         ],
       ),
     );
-
-    if (newTitle != null && newTitle.isNotEmpty) {
-      final updated = _doc.copyWith(title: newTitle);
-      await DocumentRepository.instance.saveDocument(updated);
-      setState(() => _doc = updated);
+    controller.dispose();
+    if (title != null && title.isNotEmpty) {
+      await _repo.updateDocument(doc.id, (d) => d.copyWith(title: title));
     }
   }
 
-  Future<void> _exportPdf() async {
-    setState(() => _isGeneratingPdf = true);
-    try {
-      await PdfService.shareOrPrintPdf(_doc);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to export PDF: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isGeneratingPdf = false);
-    }
-  }
-
-  Future<void> _reCropCurrentPage() async {
-    if (_doc.pages.isEmpty) return;
-    final page = _doc.pages[_currentPageIndex];
-
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CropScreen(
-          page: page,
-          parentDocument: _doc,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _deleteDocument() async {
-    final theme = Theme.of(context);
+  Future<void> _delete(ScannedDocument doc) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: theme.colorScheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Delete Document?',
-          style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          'This will permanently delete this document and all its scanned pages from local storage.',
-          style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.7)),
-        ),
+        title: const Text('Delete document?'),
+        content: Text('"${doc.title}" and its ${doc.pageCount} page${doc.pageCount == 1 ? '' : 's'} will be permanently deleted from this device.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.6))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
+    if (confirm != true) return;
+    await _repo.deleteDocument(doc.id);
+    if (mounted) Navigator.pop(context);
+  }
 
-    if (confirm == true) {
-      await DocumentRepository.instance.deleteDocument(_doc.id);
-      if (mounted) Navigator.pop(context);
+  Future<void> _exportPdf(ScannedDocument doc) async {
+    setState(() => _exporting = true);
+    try {
+      await PdfService.shareOrPrintPdf(doc);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not export the PDF: $e')));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
+  }
+
+  void _editPages(ScannedDocument doc) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ScanReviewScreen(documentId: doc.id)));
+  }
+
+  void _addPages(ScannedDocument doc) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => CameraScreen(targetDocumentId: doc.id)));
+  }
+
+  void _openInsights(ScannedDocument doc) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => InsightsScreen(documentId: doc.id)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final primaryColor = theme.colorScheme.primary;
+    return ListenableBuilder(
+      listenable: Listenable.merge([_repo, OcrService.instance.progress]),
+      builder: (context, _) {
+        final doc = _repo.byId(widget.documentId);
+        if (doc == null) {
+          return Scaffold(appBar: AppBar(), body: const Center(child: Text('This document no longer exists.')));
+        }
+        if (doc.pages.isNotEmpty && _current >= doc.pages.length) _current = doc.pages.length - 1;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final bool isWideScreen = constraints.maxWidth >= 900;
-
-        return Scaffold(
-          backgroundColor: theme.scaffoldBackgroundColor,
-          appBar: AppBar(
-            backgroundColor: theme.colorScheme.surface,
-            elevation: 0,
-            title: InkWell(
-              onTap: _renameDocument,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        _doc.title,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Icon(Icons.edit, size: 15, color: primaryColor),
+        return LayoutBuilder(builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 900;
+          return Scaffold(
+            appBar: AppBar(
+              title: InkWell(
+                onTap: () => _rename(doc),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(child: Text(doc.title, overflow: TextOverflow.ellipsis)),
+                      const SizedBox(width: 6),
+                      Icon(Icons.edit, size: 15, color: Theme.of(context).colorScheme.primary),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'Share PDF',
+                  onPressed: _exporting || doc.pages.isEmpty ? null : () => _exportPdf(doc),
+                  icon: _exporting
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.ios_share),
+                ),
+                IconButton(
+                  tooltip: 'Delete document',
+                  onPressed: () => _delete(doc),
+                  icon: const Icon(Icons.delete_outline),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'rename':
+                        _rename(doc);
+                      case 'ocr':
+                        OcrService.instance.processDocument(doc.id, force: true);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                    if (OcrService.instance.isAvailable) const PopupMenuItem(value: 'ocr', child: Text('Recognize text again')),
                   ],
                 ),
-              ),
+              ],
             ),
-            actions: [
-              if (!isWideScreen)
-                IconButton(
-                  icon: Icon(Icons.psychology, color: primaryColor),
-                  tooltip: 'Gemma Local AI Insights',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => GemmaInsightsScreen(document: _doc),
-                      ),
-                    );
-                  },
+            body: Column(
+              children: [
+                _OcrStatusBanner(document: doc),
+                Expanded(
+                  child: doc.pages.isEmpty
+                      ? const Center(child: Text('This document has no pages.'))
+                      : wide
+                          ? Row(
+                              children: [
+                                Expanded(flex: 6, child: _buildPages(doc, showHeaderActions: true)),
+                                const VerticalDivider(width: 1),
+                                Expanded(flex: 5, child: InsightsScreen(documentId: doc.id, embedded: true)),
+                              ],
+                            )
+                          : _buildPages(doc, showHeaderActions: false),
                 ),
-              IconButton(
-                icon: _isGeneratingPdf
-                    ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor))
-                    : Icon(Icons.share_outlined, color: theme.colorScheme.onSurface.withOpacity(0.8)),
-                tooltip: 'Export & Share PDF',
-                onPressed: _isGeneratingPdf ? null : _exportPdf,
-              ),
-              PopupMenuButton<String>(
-                iconColor: theme.colorScheme.onSurface.withOpacity(0.8),
-                color: theme.colorScheme.surface,
-                onSelected: (val) {
-                  if (val == 'delete') _deleteDocument();
-                  if (val == 'rename') _renameDocument();
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'rename',
-                    child: Text('Rename', style: TextStyle(color: theme.colorScheme.onSurface)),
+                if (!wide)
+                  _ActionBar(
+                    actions: [
+                      _BarAction(Icons.edit_note, 'Edit pages', () => _editPages(doc)),
+                      _BarAction(Icons.add_a_photo_outlined, 'Add pages', () => _addPages(doc)),
+                      _BarAction(Icons.insights_outlined, 'Insights', () => _openInsights(doc)),
+                      _BarAction(Icons.picture_as_pdf_outlined, 'PDF', _exporting ? null : () => _exportPdf(doc)),
+                    ],
                   ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Delete Document', style: TextStyle(color: Colors.redAccent)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          body: _doc.pages.isEmpty
-              ? Center(
-                  child: Text(
-                    'No pages in this document',
-                    style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
-                  ),
-                )
-              : isWideScreen
-                  ? _buildWideScreenLayout(theme, primaryColor)
-                  : _buildMobileLayout(theme, primaryColor),
-        );
+              ],
+            ),
+          );
+        });
       },
     );
   }
 
-  Widget _buildMobileLayout(ThemeData theme, Color primaryColor) {
+  Widget _buildPages(ScannedDocument doc, {required bool showHeaderActions}) {
+    final theme = Theme.of(context);
     return Column(
       children: [
-        // Top Page Counter & AI Banner
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            border: Border(
-              bottom: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
-            ),
-          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Page ${_currentPageIndex + 1} of ${_doc.pageCount}',
-                style: TextStyle(
-                  color: theme.colorScheme.onSurface.withOpacity(0.7),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+              Expanded(
+                child: Text(
+                  'Page ${_current + 1} of ${doc.pageCount}',
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
                 ),
               ),
-              InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => GemmaInsightsScreen(document: _doc),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: primaryColor.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: primaryColor.withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.auto_awesome, color: primaryColor, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Gemma Intelligence',
-                        style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              if (showHeaderActions) ...[
+                TextButton.icon(onPressed: () => _editPages(doc), icon: const Icon(Icons.edit_note), label: const Text('Edit pages')),
+                TextButton.icon(onPressed: () => _addPages(doc), icon: const Icon(Icons.add_a_photo_outlined), label: const Text('Add pages')),
+              ],
             ],
           ),
         ),
-
-        // Main Page View (Interactive Viewer)
         Expanded(
           child: PageView.builder(
-            itemCount: _doc.pageCount,
-            onPageChanged: (idx) => setState(() => _currentPageIndex = idx),
-            itemBuilder: (context, index) {
-              final page = _doc.pages[index];
-              final imgPath = page.processedImagePath ?? page.rawImagePath;
-              return InteractiveViewer(
-                minScale: 1.0,
-                maxScale: 4.0,
-                child: Center(
-                  child: Image.file(
-                    File(imgPath),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-
-        // Bottom Page Control Bar
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            border: Border(
-              top: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+            controller: _pager,
+            itemCount: doc.pageCount,
+            onPageChanged: (index) => setState(() => _current = index),
+            itemBuilder: (context, index) => InteractiveViewer(
+              maxScale: 5,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: PageImage(path: doc.pages[index].displayImagePath),
+              ),
             ),
           ),
-          child: SafeArea(
-            top: false,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                TextButton.icon(
-                  onPressed: _reCropCurrentPage,
-                  icon: Icon(Icons.crop, color: primaryColor),
-                  label: Text('Re-Crop', style: TextStyle(color: primaryColor)),
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: theme.colorScheme.onPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => GemmaInsightsScreen(document: _doc),
+        ),
+        if (doc.pageCount > 1)
+          SizedBox(
+            height: 84,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              itemCount: doc.pageCount,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final selected = index == _current;
+                return GestureDetector(
+                  onTap: () => _jumpTo(index),
+                  child: Container(
+                    width: 50,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: selected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+                        width: selected ? 2.5 : 1,
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.psychology, size: 18),
-                  label: const Text('Gemma AI', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                TextButton.icon(
-                  onPressed: _exportPdf,
-                  icon: Icon(Icons.picture_as_pdf_outlined, color: primaryColor),
-                  label: Text('Export PDF', style: TextStyle(color: primaryColor)),
-                ),
-              ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: PageImage(path: doc.pages[index].displayImagePath, fit: BoxFit.cover, cacheWidth: 120),
+                  ),
+                );
+              },
             ),
           ),
-        ),
       ],
     );
   }
+}
 
-  Widget _buildWideScreenLayout(ThemeData theme, Color primaryColor) {
-    return Row(
-      children: [
-        // Left: Interactive Document Preview
-        Expanded(
-          flex: 6,
-          child: Container(
-            color: theme.scaffoldBackgroundColor,
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    border: Border(
-                      bottom: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Page ${_currentPageIndex + 1} of ${_doc.pageCount}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface.withOpacity(0.7),
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: primaryColor,
-                              side: BorderSide(color: primaryColor),
-                            ),
-                            onPressed: _reCropCurrentPage,
-                            icon: const Icon(Icons.crop, size: 16),
-                            label: const Text('Re-Crop Page'),
-                          ),
-                          const SizedBox(width: 10),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryColor,
-                              foregroundColor: theme.colorScheme.onPrimary,
-                            ),
-                            onPressed: _exportPdf,
-                            icon: const Icon(Icons.picture_as_pdf, size: 16),
-                            label: const Text('Export PDF', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: PageView.builder(
-                    itemCount: _doc.pageCount,
-                    onPageChanged: (idx) => setState(() => _currentPageIndex = idx),
-                    itemBuilder: (context, index) {
-                      final page = _doc.pages[index];
-                      final imgPath = page.processedImagePath ?? page.rawImagePath;
-                      return InteractiveViewer(
-                        minScale: 1.0,
-                        maxScale: 4.0,
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24.0),
-                            child: Image.file(File(imgPath), fit: BoxFit.contain),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
+class _OcrStatusBanner extends StatelessWidget {
+  final ScannedDocument document;
+
+  const _OcrStatusBanner({required this.document});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final progress = OcrService.instance.progress.value[document.id];
+    if (progress != null) {
+      final total = progress.total == 0 ? 1 : progress.total;
+      return Material(
+        color: theme.colorScheme.primary.withValues(alpha: 0.10),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Recognizing text… page ${(progress.done + 1).clamp(1, total)} of $total',
+                style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              LinearProgressIndicator(value: progress.done / total),
+            ],
           ),
         ),
-
-        // Vertical Divider
-        Container(width: 1, color: theme.colorScheme.outlineVariant),
-
-        // Right Pane: Integrated Gemma AI Insights
-        Expanded(
-          flex: 5,
-          child: GemmaInsightsScreen(document: _doc),
+      );
+    }
+    if (!OcrService.instance.isAvailable && !document.isFullyRecognized) {
+      return Material(
+        color: Colors.amber.withValues(alpha: 0.12),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 18, color: Colors.amber),
+              SizedBox(width: 10),
+              Expanded(child: Text('Text recognition runs on Android and iOS devices.')),
+            ],
+          ),
         ),
-      ],
+      );
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+class _BarAction {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _BarAction(this.icon, this.label, this.onTap);
+}
+
+/// Equal-width actions with scaled-down labels: never overflows, even at large text sizes.
+class _ActionBar extends StatelessWidget {
+  final List<_BarAction> actions;
+
+  const _ActionBar({required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(
+            children: [
+              for (final action in actions)
+                Expanded(
+                  child: TextButton(
+                    onPressed: action.onTap,
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(action.icon),
+                        const SizedBox(height: 2),
+                        FittedBox(child: Text(action.label, maxLines: 1)),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

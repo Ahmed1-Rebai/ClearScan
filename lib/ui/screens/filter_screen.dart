@@ -1,184 +1,124 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import '../../core/cv/cv_isolate_service.dart';
-import '../../core/cv/filter_engine.dart';
 import '../../core/models/document.dart';
-import '../../core/storage/document_repository.dart';
-import 'document_detail_screen.dart';
 
+/// Live preview of enhancement filters on a page. Pops with the chosen [ScanFilterType].
+///
+/// Previews are rendered at reduced resolution for speed; the final page is
+/// re-rendered at full resolution by the caller.
 class FilterScreen extends StatefulWidget {
   final ScannedPage page;
-  final img.Image warpedImage;
-  final ScannedDocument? parentDocument;
 
-  const FilterScreen({
-    super.key,
-    required this.page,
-    required this.warpedImage,
-    this.parentDocument,
-  });
+  const FilterScreen({super.key, required this.page});
 
   @override
   State<FilterScreen> createState() => _FilterScreenState();
 }
 
 class _FilterScreenState extends State<FilterScreen> {
-  late img.Image _currentImage;
-  ScanFilterType _selectedFilter = ScanFilterType.magicColor;
-  bool _isProcessing = false;
-  Uint8List? _previewBytes;
-  final Map<ScanFilterType, Uint8List> _filterCache = {};
+  static const _filters = [
+    (ScanFilterType.magicColor, 'Magic Color', Icons.auto_awesome),
+    (ScanFilterType.sharpBW, 'B&W', Icons.contrast),
+    (ScanFilterType.grayscale, 'Grayscale', Icons.filter_b_and_w),
+    (ScanFilterType.lighten, 'Lighten', Icons.wb_sunny_outlined),
+    (ScanFilterType.original, 'Original', Icons.image_outlined),
+  ];
+
+  img.Image? _base;
+  final Map<ScanFilterType, Uint8List> _previews = {};
+  late ScanFilterType _selected = widget.page.filterType;
+  bool _busy = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _currentImage = widget.warpedImage;
-    _applyFilter(_selectedFilter);
+    _load();
   }
 
-  Future<void> _applyFilter(ScanFilterType filter) async {
+  Future<void> _load() async {
+    try {
+      _base = await CvIsolateService.renderPreviewBaseAsync(
+        rawPath: widget.page.rawImagePath,
+        corners: widget.page.corners,
+        rotation: widget.page.rotationDegrees,
+      );
+      await _select(_selected);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not render the page preview.');
+    }
+  }
+
+  Future<void> _select(ScanFilterType filter) async {
     setState(() {
-      _selectedFilter = filter;
-      _isProcessing = true;
+      _selected = filter;
+      _busy = !_previews.containsKey(filter);
     });
-
-    if (_filterCache.containsKey(filter)) {
-      setState(() {
-        _previewBytes = _filterCache[filter];
-        _isProcessing = false;
-      });
-      return;
-    }
-
-    // Process filter and JPEG encoding in a single background isolate call
-    final bytes = await CvIsolateService.applyFilterAndEncodeAsync(_currentImage, filter);
-    _filterCache[filter] = bytes;
-
-    if (mounted) {
-      setState(() {
-        _previewBytes = bytes;
-        _isProcessing = false;
-      });
-    }
-  }
-
-  Future<void> _rotateImage() async {
-    setState(() => _isProcessing = true);
-    final rotated = await CvIsolateService.rotateAsync(_currentImage, 90);
-    _currentImage = rotated;
-    _filterCache.clear();
-    await _applyFilter(_selectedFilter);
-  }
-
-  Future<void> _saveAndFinish() async {
-    setState(() => _isProcessing = true);
-
-    // Apply selected filter to full-res image in background isolate
-    final filtered = await CvIsolateService.applyFilterAsync(_currentImage, _selectedFilter);
-    final processedPath = await DocumentRepository.instance.saveProcessedPageImage(
-      filtered,
-      widget.page.id,
-    );
-
-    final updatedPage = widget.page.copyWith(
-      processedImagePath: processedPath,
-      filterType: _selectedFilter,
-    );
-
-    // Save into document
-    ScannedDocument doc;
-    if (widget.parentDocument != null) {
-      final existingPages = List<ScannedPage>.from(widget.parentDocument!.pages);
-      final pageIndex = existingPages.indexWhere((p) => p.id == updatedPage.id);
-      if (pageIndex >= 0) {
-        existingPages[pageIndex] = updatedPage;
-      } else {
-        existingPages.add(updatedPage);
-      }
-      doc = widget.parentDocument!.copyWith(pages: existingPages);
-    } else {
-      doc = ScannedDocument(
-        title: 'Scan_${DateTime.now().month}_${DateTime.now().day}_${DateTime.now().hour}${DateTime.now().minute}',
-        pages: [updatedPage],
-      );
-    }
-
-    await DocumentRepository.instance.saveDocument(doc);
-
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (context) => DocumentDetailScreen(document: doc),
-        ),
-        (route) => route.isFirst,
-      );
-    }
+    if (_previews.containsKey(filter) || _base == null) return;
+    final bytes = await CvIsolateService.applyFilterAndEncodeAsync(_base!, filter, quality: 85);
+    if (!mounted) return;
+    setState(() {
+      _previews[filter] = bytes;
+      if (_selected == filter) _busy = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final primaryColor = theme.colorScheme.primary;
+    final primary = theme.colorScheme.primary;
+    final preview = _previews[_selected];
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Enhance Scan'),
+        title: const Text('Enhance'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.rotate_right_rounded),
-            tooltip: 'Rotate 90°',
-            onPressed: _isProcessing ? null : _rotateImage,
-          ),
           TextButton.icon(
-            onPressed: _isProcessing ? null : _saveAndFinish,
-            icon: Icon(Icons.check, color: primaryColor),
-            label: Text(
-              'Save',
-              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
-            ),
+            onPressed: () => Navigator.pop(context, _selected),
+            icon: const Icon(Icons.check),
+            label: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: Center(
-              child: _previewBytes != null
-                  ? Image.memory(
-                      _previewBytes!,
-                      fit: BoxFit.contain,
-                    )
-                  : CircularProgressIndicator(color: primaryColor),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Center(
+                child: _error != null
+                    ? Text(_error!)
+                    : preview != null
+                        ? Image.memory(preview, fit: BoxFit.contain, gaplessPlayback: true)
+                        : CircularProgressIndicator(color: primary),
+              ),
             ),
           ),
-          if (_isProcessing)
-            LinearProgressIndicator(color: primaryColor, backgroundColor: Colors.transparent),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+          SizedBox(height: 3, child: _busy ? LinearProgressIndicator(color: primary) : null),
+          DecoratedBox(
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              border: Border(
-                top: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withOpacity(0.3),
-                ),
-              ),
+              border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
             ),
             child: SafeArea(
               top: false,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                 child: Row(
                   children: [
-                    _buildFilterOption(ScanFilterType.magicColor, 'Magic Color', Icons.auto_awesome, theme),
-                    _buildFilterOption(ScanFilterType.sharpBW, 'Sharp B&W', Icons.contrast, theme),
-                    _buildFilterOption(ScanFilterType.grayscale, 'Grayscale', Icons.filter_b_and_w, theme),
-                    _buildFilterOption(ScanFilterType.lighten, 'Lighten', Icons.wb_sunny_outlined, theme),
-                    _buildFilterOption(ScanFilterType.original, 'Original', Icons.image_outlined, theme),
+                    for (final (filter, label, icon) in _filters)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: _FilterChoice(
+                          label: label,
+                          icon: icon,
+                          selected: filter == _selected,
+                          onTap: _base == null ? null : () => _select(filter),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -188,59 +128,41 @@ class _FilterScreenState extends State<FilterScreen> {
       ),
     );
   }
+}
 
-  Widget _buildFilterOption(
-    ScanFilterType filter,
-    String label,
-    IconData icon,
-    ThemeData theme,
-  ) {
-    final bool isSelected = _selectedFilter == filter;
-    final primaryColor = theme.colorScheme.primary;
-    final isDark = theme.brightness == Brightness.dark;
+class _FilterChoice extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6.0),
-      child: InkWell(
-        onTap: _isProcessing ? null : () => _applyFilter(filter),
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? primaryColor.withOpacity(isDark ? 0.2 : 0.12)
-                : (isDark ? Colors.black26 : Colors.black.withOpacity(0.04)),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isSelected
-                  ? primaryColor
-                  : theme.colorScheme.outlineVariant.withOpacity(0.4),
-              width: isSelected ? 2.0 : 1.0,
+  const _FilterChoice({required this.label, required this.icon, required this.selected, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final fg = selected ? primary : theme.colorScheme.onSurface.withValues(alpha: 0.8);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 84,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        decoration: BoxDecoration(
+          color: selected ? primary.withValues(alpha: 0.14) : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: selected ? primary : theme.colorScheme.outlineVariant, width: selected ? 2 : 1),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: fg, size: 24),
+            const SizedBox(height: 6),
+            FittedBox(
+              child: Text(label, style: TextStyle(color: fg, fontSize: 12, fontWeight: selected ? FontWeight.bold : FontWeight.w500)),
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: isSelected
-                    ? primaryColor
-                    : theme.colorScheme.onSurface.withOpacity(0.7),
-                size: 24,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected
-                      ? primaryColor
-                      : theme.colorScheme.onSurface.withOpacity(0.8),
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );

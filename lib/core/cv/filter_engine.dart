@@ -1,23 +1,12 @@
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 import '../models/document.dart';
+import 'image_buffers.dart';
 
-/// High-performance document enhancement filter engine.
-/// Re-implements CamScanner's signature "Magic Color" with lookup tables (LUTs)
-/// and memory-efficient background illumination mapping.
+/// Document enhancement filters, all built on illumination normalization so
+/// shadows and uneven lighting are removed before any tone mapping.
 class DocumentFilterEngine {
-  // Precomputed 256-element tone curves for instant O(1) pixel processing
-  static final List<double> _magicDarkLut = List.generate(
-    186,
-    (i) => pow(i / 185.0, 1.45).toDouble(),
-  );
-
-  static final List<int> _lightenLut = List.generate(
-    256,
-    (i) => (pow(i / 255.0, 0.72) * 255.0).round().clamp(0, 255),
-  );
-
-  /// Applies the requested [filter] to the [input] image.
   static img.Image applyFilter(img.Image input, ScanFilterType filter) {
     switch (filter) {
       case ScanFilterType.original:
@@ -33,179 +22,162 @@ class DocumentFilterEngine {
     }
   }
 
-  /// CamScanner's Signature "Magic Color" filter:
-  /// 1. Background illumination normalization (erases shadows, whitens paper).
-  /// 2. Text edge crisping and contrast maximization.
-  /// 3. Saturation boost for signatures, stamps, and colored headers.
+  /// Whitens paper, turns ink black and keeps (slightly boosts) colored stamps and signatures.
+  ///
+  /// After removing uneven lighting, the page's own ink and paper levels are
+  /// measured and stretched to black and white. Unlike fixed thresholds, this
+  /// keeps the soft edges of thin or slightly blurry strokes, which OCR needs.
   static img.Image applyMagicColor(img.Image input) {
     final int w = input.width;
     final int h = input.height;
-    final img.Image result = img.Image(width: w, height: h);
+    final Uint8List rgb = ImageBuffers.rgbBytes(input);
+    final Uint8List lum = ImageBuffers.luminance(input);
+    final Uint8List bg = ImageBuffers.estimateBackground(lum, w, h);
 
-    // 1. Generate small background illumination map (e.g. max 120px) to estimate low-frequency lighting
-    const int bgTargetDim = 120;
-    final int bgW = min(w, bgTargetDim);
-    final int bgH = min(h, (bgTargetDim * (h / w)).round());
+    final Uint8List normLum = Uint8List(lum.length);
+    for (int i = 0; i < lum.length; i++) {
+      normLum[i] = min(255, lum[i] * 255 ~/ max(bg[i], 40));
+    }
+    final levels = _inkPaperLevels(normLum);
+    final List<double> tone = List.generate(256, (v) {
+      final t = ((v - levels.ink) / (levels.paper - levels.ink)).clamp(0.0, 1.0);
+      return pow(t, 1.35).toDouble() * 255;
+    });
 
-    final img.Image backgroundMap = img.copyResize(
-      input,
-      width: bgW,
-      height: bgH,
-      interpolation: img.Interpolation.linear,
-    );
-    final img.Image blurredBg = img.gaussianBlur(backgroundMap, radius: 5);
-
-    final double scaleBgX = bgW / w;
-    final double scaleBgY = bgH / h;
-
-    for (int y = 0; y < h; y++) {
-      final int bgY = min((y * scaleBgY).floor(), bgH - 1);
-      for (int x = 0; x < w; x++) {
-        final img.Pixel orig = input.getPixel(x, y);
-
-        final int bgX = min((x * scaleBgX).floor(), bgW - 1);
-        final img.Pixel bg = blurredBg.getPixel(bgX, bgY);
-
-        final double r = orig.r.toDouble();
-        final double g = orig.g.toDouble();
-        final double b = orig.b.toDouble();
-
-        // Estimated background luminance
-        final double bgLum = max(50.0, 0.299 * bg.r + 0.587 * bg.g + 0.114 * bg.b);
-
-        // Normalize illumination
-        final double factor = 255.0 / bgLum;
-        final double normR = r * factor;
-        final double normG = g * factor;
-        final double normB = b * factor;
-
-        final int lum = (0.299 * normR + 0.587 * normG + 0.114 * normB).round().clamp(0, 255);
-
-        double finalR, finalG, finalB;
-        if (lum > 185) {
-          final double t = ((lum - 185) / 70.0).clamp(0.0, 1.0);
-          finalR = normR + (255.0 - normR) * t;
-          finalG = normG + (255.0 - normG) * t;
-          finalB = normB + (255.0 - normB) * t;
-        } else {
-          final double darkFactor = _magicDarkLut[lum];
-          finalR = normR * darkFactor;
-          finalG = normG * darkFactor;
-          finalB = normB * darkFactor;
+    final Uint8List out = Uint8List(rgb.length);
+    for (int i = 0, j = 0; i < lum.length; i++, j += 3) {
+      final double scale = 255.0 / max(bg[i], 40);
+      double r = min(255.0, rgb[j] * scale);
+      double g = min(255.0, rgb[j + 1] * scale);
+      double b = min(255.0, rgb[j + 2] * scale);
+      final int l = normLum[i];
+      final double target = tone[l];
+      if (target >= 254) {
+        r = g = b = 255;
+      } else {
+        // Scale towards the target luminance, preserving hue for colored ink.
+        final double f = l == 0 ? 0 : target / l;
+        r = min(255.0, r * f);
+        g = min(255.0, g * f);
+        b = min(255.0, b * f);
+        final double maxC = max(r, max(g, b));
+        final double minC = min(r, min(g, b));
+        if (maxC - minC > 28) {
+          final double mean = (r + g + b) / 3;
+          r = mean + (r - mean) * 1.3;
+          g = mean + (g - mean) * 1.3;
+          b = mean + (b - mean) * 1.3;
         }
-
-        // Color boost for colored ink, stamps, logos
-        final double maxC = max(finalR, max(finalG, finalB));
-        final double minC = min(finalR, min(finalG, finalB));
-        final double chroma = maxC - minC;
-        if (chroma > 25) {
-          final double mean = (finalR + finalG + finalB) / 3.0;
-          finalR = (mean + (finalR - mean) * 1.35).clamp(0.0, 255.0);
-          finalG = (mean + (finalG - mean) * 1.35).clamp(0.0, 255.0);
-          finalB = (mean + (finalB - mean) * 1.35).clamp(0.0, 255.0);
-        }
-
-        result.setPixelRgba(
-          x,
-          y,
-          finalR.round().clamp(0, 255),
-          finalG.round().clamp(0, 255),
-          finalB.round().clamp(0, 255),
-          orig.a.toInt(),
-        );
       }
+      out[j] = r.round().clamp(0, 255);
+      out[j + 1] = g.round().clamp(0, 255);
+      out[j + 2] = b.round().clamp(0, 255);
     }
 
-    return result;
+    return ImageBuffers.fromRgb(w, h, out);
   }
 
-  /// High-Contrast Black & White binarization for clean text, forms, and photocopying.
+  /// Typical ink and paper luminance of an illumination-normalized page.
+  static ({int ink, int paper}) _inkPaperLevels(Uint8List normLum) {
+    final hist = List<int>.filled(256, 0);
+    for (final v in normLum) {
+      hist[v]++;
+    }
+    int cumulative = 0;
+    int ink = 0;
+    int median = 255;
+    final n = normLum.length;
+    bool inkFound = false;
+    for (int v = 0; v < 256; v++) {
+      cumulative += hist[v];
+      if (!inkFound && cumulative >= n * 0.01) {
+        ink = v;
+        inkFound = true;
+      }
+      if (cumulative >= n * 0.5) {
+        median = v;
+        break;
+      }
+    }
+    // Nearly blank pages have no real ink: cap the ink level so paper noise stays light.
+    final inkLevel = min(ink + 10, 140);
+    // Paper is the majority of the page; keep a little headroom so it turns pure white.
+    final paperLevel = (median * 0.93).round().clamp(inkLevel + 60, 250);
+    return (ink: inkLevel, paper: paperLevel);
+  }
+
+  /// Clean black & white via adaptive (Bradley) thresholding on normalized luminance.
+  /// Unlike a single global threshold, it keeps faint text in shadows readable.
   static img.Image applySharpBW(img.Image input) {
     final int w = input.width;
     final int h = input.height;
-    final img.Image gray = img.grayscale(input);
-    final img.Image result = img.Image(width: w, height: h);
+    final Uint8List norm = ImageBuffers.normalizeIllumination(ImageBuffers.luminance(input), w, h);
+    return ImageBuffers.fromGray(w, h, binarize(norm, w, h));
+  }
 
-    final int threshold = _computeOtsuThreshold(gray);
-
+  /// Returns 0 for ink and 255 for paper.
+  static Uint8List binarize(Uint8List gray, int w, int h, {double sensitivity = 0.15}) {
+    final int stride = w + 1;
+    final Int64List integral = Int64List((w + 1) * (h + 1));
     for (int y = 0; y < h; y++) {
+      int rowSum = 0;
       for (int x = 0; x < w; x++) {
-        final int val = gray.getPixel(x, y).r.toInt();
-        final int out = (val < threshold) ? 0 : 255;
-        result.setPixelRgba(x, y, out, out, out, 255);
+        rowSum += gray[y * w + x];
+        integral[(y + 1) * stride + x + 1] = integral[y * stride + x + 1] + rowSum;
       }
     }
 
-    return result;
+    final int half = max(7, max(w, h) ~/ 48);
+    final Uint8List out = Uint8List(w * h);
+    for (int y = 0; y < h; y++) {
+      final int y0 = max(0, y - half);
+      final int y1 = min(h - 1, y + half);
+      for (int x = 0; x < w; x++) {
+        final int x0 = max(0, x - half);
+        final int x1 = min(w - 1, x + half);
+        final int count = (y1 - y0 + 1) * (x1 - x0 + 1);
+        final int sum = integral[(y1 + 1) * stride + x1 + 1] -
+            integral[y0 * stride + x1 + 1] -
+            integral[(y1 + 1) * stride + x0] +
+            integral[y0 * stride + x0];
+        final int v = gray[y * w + x];
+        final bool ink = v < 225 && v * count < sum * (1.0 - sensitivity);
+        out[y * w + x] = ink ? 0 : 255;
+      }
+    }
+    return out;
   }
 
-  /// Multi-tone smooth grayscale document filter.
+  /// Smooth grayscale with shadows removed and contrast stretched.
   static img.Image applyGrayscale(img.Image input) {
-    final img.Image gray = img.grayscale(input);
-    return img.adjustColor(gray, contrast: 1.25, brightness: 1.05);
+    final int w = input.width;
+    final int h = input.height;
+    final Uint8List norm = ImageBuffers.normalizeIllumination(ImageBuffers.luminance(input), w, h);
+    final int low = ImageBuffers.percentile(norm, 0.01);
+    final int range = max(1, 245 - low);
+    for (int i = 0; i < norm.length; i++) {
+      norm[i] = ((norm[i] - low) * 255 ~/ range).clamp(0, 255);
+    }
+    return ImageBuffers.fromGray(w, h, norm);
   }
 
-  /// Lighten filter: brightens shaded background while maintaining ink visibility.
+  /// Brightens the paper while keeping the original colors.
   static img.Image applyLighten(img.Image input) {
     final int w = input.width;
     final int h = input.height;
-    final img.Image result = img.Image(width: w, height: h);
-
-    for (int y = 0; y < h; y++) {
-      for (int x = 0; x < w; x++) {
-        final img.Pixel p = input.getPixel(x, y);
-
-        result.setPixelRgba(
-          x,
-          y,
-          _lightenLut[p.r.toInt().clamp(0, 255)],
-          _lightenLut[p.g.toInt().clamp(0, 255)],
-          _lightenLut[p.b.toInt().clamp(0, 255)],
-          p.a.toInt(),
-        );
+    final Uint8List rgb = ImageBuffers.rgbBytes(input);
+    final Uint8List bg = ImageBuffers.estimateBackground(ImageBuffers.luminance(input), w, h);
+    final Uint8List out = Uint8List(rgb.length);
+    for (int i = 0, j = 0; i < bg.length; i++, j += 3) {
+      // Partial normalization keeps some natural paper tone.
+      final double scale = 255.0 / max(bg[i] * 0.85 + 255 * 0.15, 40);
+      for (int c = 0; c < 3; c++) {
+        out[j + c] = _lightenLut[min(255, (rgb[j + c] * scale).round())];
       }
     }
-
-    return result;
+    return ImageBuffers.fromRgb(w, h, out);
   }
 
-  /// Otsu's optimal thresholding algorithm for bimodal document distributions.
-  static int _computeOtsuThreshold(img.Image gray) {
-    final List<int> histogram = List<int>.filled(256, 0);
-    final int total = gray.width * gray.height;
-
-    for (final pixel in gray) {
-      histogram[pixel.r.toInt()]++;
-    }
-
-    double sum = 0;
-    for (int i = 0; i < 256; i++) {
-      sum += i * histogram[i];
-    }
-
-    double sumB = 0;
-    int wB = 0;
-    int wF = 0;
-    double varMax = 0;
-    int threshold = 128;
-
-    for (int t = 0; t < 256; t++) {
-      wB += histogram[t];
-      if (wB == 0) continue;
-      wF = total - wB;
-      if (wF == 0) break;
-
-      sumB += t * histogram[t];
-      final double mB = sumB / wB;
-      final double mF = (sum - sumB) / wF;
-
-      final double varBetween = wB.toDouble() * wF.toDouble() * (mB - mF) * (mB - mF);
-      if (varBetween > varMax) {
-        varMax = varBetween;
-        threshold = t;
-      }
-    }
-
-    return threshold;
-  }
+  static final List<int> _lightenLut =
+      List.generate(256, (i) => (pow(i / 255.0, 0.85) * 255).round().clamp(0, 255));
 }

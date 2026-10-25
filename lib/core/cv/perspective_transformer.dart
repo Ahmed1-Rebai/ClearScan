@@ -1,13 +1,15 @@
 import 'dart:math';
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:image/image.dart' as img;
 import '../models/document.dart';
+import 'image_buffers.dart';
 
 /// Perspective transformation and document de-warping engine.
 /// Computes the projective homography matrix and resamples pixels with bilinear interpolation.
 class PerspectiveTransformer {
-  /// Maximum width/height for rectified scanned pages (prevents memory explosion on 100MP cameras).
-  static const int maxOutputDimension = 2048;
+  /// Long-side cap for rectified pages: ~300 DPI for A4, enough for small print OCR.
+  static const int maxOutputDimension = 3000;
 
   /// Warps the quadrilateral defined by [corners] in [sourceImage] to a flat, rectified rectangle.
   static img.Image warpPerspective(
@@ -20,16 +22,9 @@ class PerspectiveTransformer {
     final Offset br = corners.bottomRight;
     final Offset bl = corners.bottomLeft;
 
-    // 1. Calculate destination dimensions based on max opposing edge lengths
-    final double widthTop = _distance(tl, tr);
-    final double widthBottom = _distance(bl, br);
-    double targetW = max(widthTop, widthBottom);
+    double targetW = max(_distance(tl, tr), _distance(bl, br));
+    double targetH = max(_distance(tl, bl), _distance(tr, br));
 
-    final double heightLeft = _distance(tl, bl);
-    final double heightRight = _distance(tr, br);
-    double targetH = max(heightLeft, heightRight);
-
-    // Limit maximum dimension while preserving aspect ratio
     final double maxDim = max(targetW, targetH);
     if (maxDim > maxOutputDimension) {
       final double scaleDown = maxOutputDimension / maxDim;
@@ -37,55 +32,60 @@ class PerspectiveTransformer {
       targetH *= scaleDown;
     }
 
-    final int dstW = targetW.round().clamp(100, maxOutputDimension);
-    final int dstH = targetH.round().clamp(100, maxOutputDimension);
+    final int dstW = targetW.round().clamp(16, maxOutputDimension);
+    final int dstH = targetH.round().clamp(16, maxOutputDimension);
 
-    final img.Image result = img.Image(width: dstW, height: dstH, numChannels: sourceImage.numChannels);
-
-    // 2. Compute 3x3 Inverse Homography Matrix: dst (x,y) -> src (u,v)
-    final List<double> matrix = _computeHomography(
+    // Inverse mapping: destination (x, y) -> source (u, v).
+    final List<double> m = _computeHomography(
       srcPts: [
         const Offset(0, 0),
-        Offset(dstW.toDouble() - 1, 0),
-        Offset(dstW.toDouble() - 1, dstH.toDouble() - 1),
-        Offset(0, dstH.toDouble() - 1),
+        Offset(dstW - 1.0, 0),
+        Offset(dstW - 1.0, dstH - 1.0),
+        Offset(0, dstH - 1.0),
       ],
       dstPts: [tl, tr, br, bl],
     );
 
-    final double m00 = matrix[0], m01 = matrix[1], m02 = matrix[2];
-    final double m10 = matrix[3], m11 = matrix[4], m12 = matrix[5];
-    final double m20 = matrix[6], m21 = matrix[7], m22 = matrix[8];
-
+    final Uint8List src = ImageBuffers.rgbBytes(sourceImage);
     final int srcW = sourceImage.width;
     final int srcH = sourceImage.height;
+    final double maxU = srcW - 1.0;
+    final double maxV = srcH - 1.0;
+    final Uint8List out = Uint8List(dstW * dstH * 3);
 
-    // Reuse 4 persistent pixel buffers to avoid millions of heap allocations in the inner loop
-    final img.Pixel p11 = sourceImage.getPixel(0, 0);
-    final img.Pixel p21 = sourceImage.getPixel(0, 0);
-    final img.Pixel p12 = sourceImage.getPixel(0, 0);
-    final img.Pixel p22 = sourceImage.getPixel(0, 0);
-
-    // 3. Resample every target pixel with Bilinear Interpolation
+    int o = 0;
     for (int y = 0; y < dstH; y++) {
-      for (int x = 0; x < dstW; x++) {
-        final double wPrime = m20 * x + m21 * y + m22;
-        if (wPrime.abs() < 1e-7) continue;
-
-        final double invW = 1.0 / wPrime;
-        final double srcX = (m00 * x + m01 * y + m02) * invW;
-        final double srcY = (m10 * x + m11 * y + m12) * invW;
-
-        if (srcX >= 0 && srcX < srcW - 1 && srcY >= 0 && srcY < srcH - 1) {
-          _sampleAndSetBilinear(sourceImage, result, x, y, srcX, srcY, p11, p21, p12, p22);
-        } else if (srcX >= 0 && srcX < srcW && srcY >= 0 && srcY < srcH) {
-          sourceImage.getPixel(srcX.floor(), srcY.floor(), p11);
-          result.setPixelRgba(x, y, p11.r.toInt(), p11.g.toInt(), p11.b.toInt(), p11.a.toInt());
+      double nu = m[1] * y + m[2];
+      double nv = m[4] * y + m[5];
+      double dw = m[7] * y + m[8];
+      for (int x = 0; x < dstW; x++, nu += m[0], nv += m[3], dw += m[6]) {
+        if (dw.abs() < 1e-9) {
+          o += 3;
+          continue;
         }
+        final double u = (nu / dw).clamp(0.0, maxU);
+        final double v = (nv / dw).clamp(0.0, maxV);
+        final int x0 = u.toInt();
+        final int y0 = v.toInt();
+        final int x1 = x0 < srcW - 1 ? x0 + 1 : x0;
+        final int y1 = y0 < srcH - 1 ? y0 + 1 : y0;
+        final double fx = u - x0;
+        final double fy = v - y0;
+        final double w00 = (1 - fx) * (1 - fy);
+        final double w10 = fx * (1 - fy);
+        final double w01 = (1 - fx) * fy;
+        final double w11 = fx * fy;
+        final int i00 = (y0 * srcW + x0) * 3;
+        final int i10 = (y0 * srcW + x1) * 3;
+        final int i01 = (y1 * srcW + x0) * 3;
+        final int i11 = (y1 * srcW + x1) * 3;
+        out[o++] = (src[i00] * w00 + src[i10] * w10 + src[i01] * w01 + src[i11] * w11 + 0.5).toInt();
+        out[o++] = (src[i00 + 1] * w00 + src[i10 + 1] * w10 + src[i01 + 1] * w01 + src[i11 + 1] * w11 + 0.5).toInt();
+        out[o++] = (src[i00 + 2] * w00 + src[i10 + 2] * w10 + src[i01 + 2] * w01 + src[i11 + 2] * w11 + 0.5).toInt();
       }
     }
 
-    return result;
+    return ImageBuffers.fromRgb(dstW, dstH, out);
   }
 
   static double _distance(Offset p1, Offset p2) {
@@ -94,57 +94,12 @@ class PerspectiveTransformer {
     return sqrt(dx * dx + dy * dy);
   }
 
-  /// Bilinear interpolation sampler for anti-aliased sub-pixel mapping.
-  /// Reuses [p11], [p21], [p12], [p22] buffers for zero-allocation performance.
-  static void _sampleAndSetBilinear(
-    img.Image src,
-    img.Image dst,
-    int dstX,
-    int dstY,
-    double x,
-    double y,
-    img.Pixel p11,
-    img.Pixel p21,
-    img.Pixel p12,
-    img.Pixel p22,
-  ) {
-    final int x1 = x.floor();
-    final int y1 = y.floor();
-    final int x2 = min(x1 + 1, src.width - 1);
-    final int y2 = min(y1 + 1, src.height - 1);
-
-    final double fx = x - x1;
-    final double fy = y - y1;
-    final double ifx = 1.0 - fx;
-    final double ify = 1.0 - fy;
-
-    src.getPixel(x1, y1, p11);
-    src.getPixel(x2, y1, p21);
-    src.getPixel(x1, y2, p12);
-    src.getPixel(x2, y2, p22);
-
-    final double r = (p11.r * ifx + p21.r * fx) * ify + (p12.r * ifx + p22.r * fx) * fy;
-    final double g = (p11.g * ifx + p21.g * fx) * ify + (p12.g * ifx + p22.g * fx) * fy;
-    final double b = (p11.b * ifx + p21.b * fx) * ify + (p12.b * ifx + p22.b * fx) * fy;
-    final double a = (p11.a * ifx + p21.a * fx) * ify + (p12.a * ifx + p22.a * fx) * fy;
-
-    dst.setPixelRgba(
-      dstX,
-      dstY,
-      r.round().clamp(0, 255),
-      g.round().clamp(0, 255),
-      b.round().clamp(0, 255),
-      a.round().clamp(0, 255),
-    );
-  }
-
   /// Computes the 3x3 Projective Transformation Matrix mapping [srcPts] to [dstPts]
   /// using Direct Linear Transform (DLT) with Gaussian elimination.
   static List<double> _computeHomography({
     required List<Offset> srcPts,
     required List<Offset> dstPts,
   }) {
-    // 8x8 Linear System: A * h = b
     final List<List<double>> a = List.generate(8, (_) => List<double>.filled(8, 0.0));
     final List<double> b = List<double>.filled(8, 0.0);
 
@@ -160,16 +115,10 @@ class PerspectiveTransformer {
       a[r1][0] = sx;
       a[r1][1] = sy;
       a[r1][2] = 1.0;
-      a[r1][3] = 0.0;
-      a[r1][4] = 0.0;
-      a[r1][5] = 0.0;
       a[r1][6] = -sx * dx;
       a[r1][7] = -sy * dx;
       b[r1] = dx;
 
-      a[r2][0] = 0.0;
-      a[r2][1] = 0.0;
-      a[r2][2] = 0.0;
       a[r2][3] = sx;
       a[r2][4] = sy;
       a[r2][5] = 1.0;
@@ -179,18 +128,13 @@ class PerspectiveTransformer {
     }
 
     final List<double> h = _solveGaussian(a, b);
-    return [
-      h[0], h[1], h[2],
-      h[3], h[4], h[5],
-      h[6], h[7], 1.0,
-    ];
+    return [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1.0];
   }
 
   /// Gaussian elimination solver with partial pivoting for numerical stability.
   static List<double> _solveGaussian(List<List<double>> a, List<double> b) {
     final int n = b.length;
     for (int i = 0; i < n; i++) {
-      // Pivot selection
       int maxRow = i;
       double maxVal = a[i][i].abs();
       for (int k = i + 1; k < n; k++) {
@@ -200,7 +144,6 @@ class PerspectiveTransformer {
         }
       }
 
-      // Swap rows
       final List<double> tempA = a[i];
       a[i] = a[maxRow];
       a[maxRow] = tempA;
@@ -209,7 +152,6 @@ class PerspectiveTransformer {
       b[i] = b[maxRow];
       b[maxRow] = tempB;
 
-      // Normalize row
       final double pivot = a[i][i];
       if (pivot.abs() < 1e-12) continue;
 
@@ -218,7 +160,6 @@ class PerspectiveTransformer {
       }
       b[i] /= pivot;
 
-      // Eliminate other rows
       for (int k = 0; k < n; k++) {
         if (k != i) {
           final double factor = a[k][i];

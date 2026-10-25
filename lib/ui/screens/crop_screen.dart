@@ -1,352 +1,212 @@
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
 import '../../core/cv/cv_isolate_service.dart';
 import '../../core/models/document.dart';
-import '../../core/storage/document_repository.dart';
 import '../widgets/magnifier_loupe.dart';
 import '../widgets/polygon_cropper_painter.dart';
-import 'filter_screen.dart';
 
+/// Lets the user adjust the page corners on the raw photo.
+/// Pops with the new [DocumentCorners] in image pixel coordinates, or null when cancelled.
 class CropScreen extends StatefulWidget {
-  final ScannedPage page;
-  final ScannedDocument? parentDocument;
+  final String rawImagePath;
+  final DocumentCorners? initialCorners;
 
-  const CropScreen({
-    super.key,
-    required this.page,
-    this.parentDocument,
-  });
+  const CropScreen({super.key, required this.rawImagePath, this.initialCorners});
 
   @override
   State<CropScreen> createState() => _CropScreenState();
 }
 
 class _CropScreenState extends State<CropScreen> {
-  ui.Image? _decodedUiImage;
-  img.Image? _decodedImg;
+  ui.Image? _image;
   DocumentCorners? _corners;
-  int? _activeCornerIndex;
-  Offset? _touchPosition;
-  bool _isLoading = true;
-  Size _displaySize = Size.zero;
+  int? _activeCorner;
+  Offset? _touch;
+  bool _detecting = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadImage();
+    _load();
   }
 
-  Future<void> _loadImage() async {
-    final file = File(widget.page.rawImagePath);
-    if (!await file.exists()) {
-      if (mounted) Navigator.pop(context);
-      return;
-    }
-
-    final Uint8List bytes = await file.readAsBytes();
-    // Run GPU codec and background isolate decoder concurrently
-    final uiCodecFuture = ui.instantiateImageCodec(bytes);
-    final decodeImgFuture = CvIsolateService.decodeImageAsync(bytes);
-
-    final results = await Future.wait([uiCodecFuture, decodeImgFuture]);
-    final codec = results[0] as ui.Codec;
-    final frame = await codec.getNextFrame();
-    final decodedImg = results[1] as img.Image?;
-
-    if (mounted) {
-      setState(() {
-        _decodedUiImage = frame.image;
-        _decodedImg = decodedImg;
-        _isLoading = false;
-      });
-    }
+  @override
+  void dispose() {
+    _image?.dispose();
+    super.dispose();
   }
 
-  Future<void> _initializeCorners(Size containerSize) async {
-    if (_corners != null || _decodedImg == null) return;
-
-    // Calculate aspect-ratio preserved dimensions
-    final double imgAspect = _decodedImg!.width / _decodedImg!.height;
-    final double containerAspect = containerSize.width / containerSize.height;
-
-    double renderW, renderH;
-    if (imgAspect > containerAspect) {
-      renderW = containerSize.width;
-      renderH = containerSize.width / imgAspect;
-    } else {
-      renderH = containerSize.height;
-      renderW = containerSize.height * imgAspect;
-    }
-
-    final displaySize = Size(renderW, renderH);
-
-    // Detect using CV edge detector in background isolate
-    final detected = await CvIsolateService.detectCornersAsync(_decodedImg!);
-
-    final double scaleX = renderW / _decodedImg!.width;
-    final double scaleY = renderH / _decodedImg!.height;
-
-    if (mounted) {
-      setState(() {
-        _displaySize = displaySize;
-        _corners = DocumentCorners(
-          topLeft: Offset(detected.topLeft.dx * scaleX, detected.topLeft.dy * scaleY),
-          topRight: Offset(detected.topRight.dx * scaleX, detected.topRight.dy * scaleY),
-          bottomRight: Offset(detected.bottomRight.dx * scaleX, detected.bottomRight.dy * scaleY),
-          bottomLeft: Offset(detected.bottomLeft.dx * scaleX, detected.bottomLeft.dy * scaleY),
-        );
-      });
-    }
-  }
-
-  void _onPanStart(DragStartDetails details) {
-    if (_corners == null) return;
-    final List<Offset> pts = _corners!.toList();
-    final Offset pos = details.localPosition;
-
-    int? closestIdx;
-    double closestDist = 48.0; // Touch hit radius
-
-    for (int i = 0; i < 4; i++) {
-      final double d = (pts[i] - pos).distance;
-      if (d < closestDist) {
-        closestDist = d;
-        closestIdx = i;
+  Future<void> _load() async {
+    try {
+      final bytes = await File(widget.rawImagePath).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
       }
-    }
-
-    if (closestIdx != null) {
       setState(() {
-        _activeCornerIndex = closestIdx;
-        _touchPosition = pos;
+        _image = frame.image;
+        _corners = widget.initialCorners;
       });
+      if (_corners == null) await _autoDetect();
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not open this photo.');
     }
-  }
-
-  void _onPanUpdate(DragUpdateDetails details) {
-    if (_activeCornerIndex == null || _corners == null) return;
-
-    final Offset pos = details.localPosition;
-    final double clampedX = pos.dx.clamp(0.0, _displaySize.width);
-    final double clampedY = pos.dy.clamp(0.0, _displaySize.height);
-    final Offset clamped = Offset(clampedX, clampedY);
-
-    setState(() {
-      _touchPosition = clamped;
-      switch (_activeCornerIndex) {
-        case 0:
-          _corners = _corners!.copyWith(topLeft: clamped);
-          break;
-        case 1:
-          _corners = _corners!.copyWith(topRight: clamped);
-          break;
-        case 2:
-          _corners = _corners!.copyWith(bottomRight: clamped);
-          break;
-        case 3:
-          _corners = _corners!.copyWith(bottomLeft: clamped);
-          break;
-      }
-    });
-  }
-
-  void _onPanEnd(DragEndDetails details) {
-    setState(() {
-      _activeCornerIndex = null;
-      _touchPosition = null;
-    });
-  }
-
-  void _resetToFullPage() {
-    if (_displaySize == Size.zero) return;
-    setState(() {
-      _corners = DocumentCorners.defaultRect(_displaySize.width, _displaySize.height);
-    });
   }
 
   Future<void> _autoDetect() async {
-    if (_decodedImg == null || _displaySize == Size.zero) return;
-    setState(() => _isLoading = true);
-
-    final detected = await CvIsolateService.detectCornersAsync(_decodedImg!);
-    final double scaleX = _displaySize.width / _decodedImg!.width;
-    final double scaleY = _displaySize.height / _decodedImg!.height;
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        _corners = DocumentCorners(
-          topLeft: Offset(detected.topLeft.dx * scaleX, detected.topLeft.dy * scaleY),
-          topRight: Offset(detected.topRight.dx * scaleX, detected.topRight.dy * scaleY),
-          bottomRight: Offset(detected.bottomRight.dx * scaleX, detected.bottomRight.dy * scaleY),
-          bottomLeft: Offset(detected.bottomLeft.dx * scaleX, detected.bottomLeft.dy * scaleY),
-        );
-      });
+    setState(() => _detecting = true);
+    try {
+      final corners = await CvIsolateService.detectCornersFromFileAsync(widget.rawImagePath);
+      if (mounted) setState(() => _corners = corners);
+    } catch (_) {
+      _fullPage();
+    } finally {
+      if (mounted) setState(() => _detecting = false);
     }
   }
 
-  Future<void> _proceedToFilter() async {
-    if (_decodedImg == null || _corners == null) return;
-
-    setState(() => _isLoading = true);
-
-    // Map display corners back to original image dimensions
-    final double scaleX = _decodedImg!.width / _displaySize.width;
-    final double scaleY = _decodedImg!.height / _displaySize.height;
-
-    final imageCorners = DocumentCorners(
-      topLeft: Offset(_corners!.topLeft.dx * scaleX, _corners!.topLeft.dy * scaleY),
-      topRight: Offset(_corners!.topRight.dx * scaleX, _corners!.topRight.dy * scaleY),
-      bottomRight: Offset(_corners!.bottomRight.dx * scaleX, _corners!.bottomRight.dy * scaleY),
-      bottomLeft: Offset(_corners!.bottomLeft.dx * scaleX, _corners!.bottomLeft.dy * scaleY),
-    );
-
-    // Run perspective rectification in background isolate to avoid ANR
-    final warped = await CvIsolateService.warpPerspectiveAsync(_decodedImg!, imageCorners);
-    final processedPath = await DocumentRepository.instance.saveProcessedPageImage(warped, widget.page.id);
-
-    final updatedPage = widget.page.copyWith(
-      corners: imageCorners,
-      processedImagePath: processedPath,
-    );
-
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => FilterScreen(
-            page: updatedPage,
-            warpedImage: warped,
-            parentDocument: widget.parentDocument,
-          ),
-        ),
-      );
-    }
+  void _fullPage() {
+    final image = _image;
+    if (image == null) return;
+    setState(() => _corners = DocumentCorners.fullImage(image.width.toDouble(), image.height.toDouble()));
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final primaryColor = theme.colorScheme.primary;
+    final primary = theme.colorScheme.primary;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Adjust Crop'),
+        title: const Text('Adjust crop'),
         actions: [
           TextButton.icon(
-            onPressed: _isLoading ? null : _proceedToFilter,
-            icon: Icon(Icons.check, color: primaryColor),
-            label: Text(
-              'Next',
-              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+            onPressed: _corners == null || _detecting ? null : () => Navigator.pop(context, _corners),
+            icon: const Icon(Icons.check),
+            label: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(child: _buildEditor(primary)),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: _image == null ? null : _fullPage,
+                        icon: const Icon(Icons.crop_free),
+                        label: const FittedBox(child: Text('Full page')),
+                      ),
+                    ),
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: _image == null || _detecting ? null : _autoDetect,
+                        icon: const Icon(Icons.auto_fix_high),
+                        label: const FittedBox(child: Text('Auto-detect')),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
       ),
-      body: _isLoading
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(color: primaryColor),
-                  const SizedBox(height: 16),
-                  const Text('Processing image in background isolate...', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                ],
-              ),
-            )
-          : Column(
+    );
+  }
+
+  Widget _buildEditor(Color primary) {
+    if (_error != null) return Center(child: Text(_error!));
+    final image = _image;
+    final corners = _corners;
+    if (image == null || corners == null) return Center(child: CircularProgressIndicator(color: primary));
+
+    return LayoutBuilder(builder: (context, constraints) {
+      // Leave room around the photo so corner handles stay reachable.
+      final scale = max(1e-3, min((constraints.maxWidth - 32) / image.width, (constraints.maxHeight - 32) / image.height));
+      final displaySize = Size(image.width * scale, image.height * scale);
+      final displayCorners = corners.scale(scale, scale);
+
+      void onPanStart(DragStartDetails d) {
+        final pts = displayCorners.toList();
+        int? closest;
+        double best = 44;
+        for (int i = 0; i < 4; i++) {
+          final dist = (pts[i] - d.localPosition).distance;
+          if (dist < best) {
+            best = dist;
+            closest = i;
+          }
+        }
+        if (closest != null) {
+          setState(() {
+            _activeCorner = closest;
+            _touch = d.localPosition;
+          });
+        }
+      }
+
+      void onPanUpdate(DragUpdateDetails d) {
+        final index = _activeCorner;
+        if (index == null) return;
+        final p = Offset(
+          d.localPosition.dx.clamp(0.0, displaySize.width),
+          d.localPosition.dy.clamp(0.0, displaySize.height),
+        );
+        final pts = corners.toList();
+        pts[index] = p / scale;
+        final candidate = DocumentCorners.fromList(pts);
+        setState(() {
+          _touch = p;
+          // Reject moves that would fold the quad (a warp of it would be garbage).
+          if (candidate.isConvex) _corners = candidate;
+        });
+      }
+
+      void onPanEnd([Object? _]) => setState(() {
+            _activeCorner = null;
+            _touch = null;
+          });
+
+      return Center(
+        child: SizedBox.fromSize(
+          size: displaySize,
+          child: GestureDetector(
+            onPanStart: onPanStart,
+            onPanUpdate: onPanUpdate,
+            onPanEnd: onPanEnd,
+            onPanCancel: onPanEnd,
+            child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final containerSize = Size(constraints.maxWidth, constraints.maxHeight);
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        _initializeCorners(containerSize);
-                      });
-
-                      if (_displaySize == Size.zero) {
-                        return Center(child: CircularProgressIndicator(color: primaryColor));
-                      }
-
-                      return Center(
-                        child: SizedBox(
-                          width: _displaySize.width,
-                          height: _displaySize.height,
-                          child: GestureDetector(
-                            onPanStart: _onPanStart,
-                            onPanUpdate: _onPanUpdate,
-                            onPanEnd: _onPanEnd,
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                if (_decodedUiImage != null)
-                                  RawImage(
-                                    image: _decodedUiImage,
-                                    width: _displaySize.width,
-                                    height: _displaySize.height,
-                                    fit: BoxFit.fill,
-                                  ),
-                                if (_corners != null)
-                                  CustomPaint(
-                                    size: _displaySize,
-                                    painter: PolygonCropperPainter(
-                                      corners: _corners!,
-                                      activeCornerIndex: _activeCornerIndex,
-                                      primaryColor: primaryColor,
-                                    ),
-                                  ),
-                                if (_activeCornerIndex != null && _touchPosition != null)
-                                  MagnifierLoupe(
-                                    position: _touchPosition!,
-                                    image: _decodedUiImage,
-                                    displaySize: _displaySize,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                RawImage(image: image, width: displaySize.width, height: displaySize.height, fit: BoxFit.fill),
+                CustomPaint(
+                  size: displaySize,
+                  painter: PolygonCropperPainter(corners: displayCorners, activeCornerIndex: _activeCorner, primaryColor: primary),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    border: Border(
-                      top: BorderSide(
-                        color: theme.colorScheme.outlineVariant.withOpacity(0.3),
-                      ),
-                    ),
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        TextButton.icon(
-                          onPressed: _resetToFullPage,
-                          icon: Icon(Icons.crop_free, color: theme.colorScheme.onSurface.withOpacity(0.7)),
-                          label: Text(
-                            'Full Page',
-                            style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.7)),
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: _autoDetect,
-                          icon: Icon(Icons.auto_fix_high, color: primaryColor),
-                          label: Text('Auto-Detect', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                if (_activeCorner != null && _touch != null)
+                  MagnifierLoupe(position: _touch!, image: image, displaySize: displaySize),
+                if (_detecting) const Positioned.fill(child: Center(child: CircularProgressIndicator())),
               ],
             ),
-    );
+          ),
+        ),
+      );
+    });
   }
 }
