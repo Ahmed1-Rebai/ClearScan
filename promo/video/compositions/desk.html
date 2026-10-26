@@ -1,0 +1,51 @@
+<template>
+  <style>
+
+    #root { position: absolute; inset: 0; overflow: hidden; background: #0B0F19;
+      font-family: "Inter", sans-serif; color: #F8FAFC; }
+    .cap { position: absolute; left: 90px; right: 90px; top: 230px; z-index: 20; text-align: center;
+      font-weight: 700; font-size: 80px; line-height: 1.08; letter-spacing: -0.02em; color: #F8FAFC;
+      text-shadow: 0 4px 24px rgba(11, 15, 25, 0.8); }
+    .cap .w { display: inline-block; }
+    .cap .acc { color: #00E5FF; text-shadow: 0 0 28px rgba(0, 229, 255, 0.55); }
+
+    .desk-bg { position: absolute; inset: 0;
+      background: radial-gradient(1200px 1100px at 50% 62%, #16213A 0%, #0B0F19 70%); }
+    .desk { position: absolute; inset: 0; }
+    .page { position: absolute; left: 330px; top: 760px; width: 420px; height: 594px; background: #FBFBF8;
+      border-radius: 4px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25); }
+    .page .ph { position: absolute; left: 42px; top: 48px; width: 220px; height: 16px; border-radius: 3px; background: #C9CDD6; }
+    .page .pt { position: absolute; left: 42px; right: 42px; top: 92px; bottom: 60px;
+      background: repeating-linear-gradient(to bottom, #DADDE3 0 6px, transparent 6px 20px); }
+
+  </style>
+  <div id="root" data-composition-id="desk" data-width="1080" data-height="1920" data-duration="2.5">
+    <div class="desk-bg"></div>
+    <div id="desk-cam" class="desk">
+      <div id="desk-p0" class="page"><div class="ph"></div><div class="pt"></div></div>
+      <div id="desk-p1" class="page"><div class="ph"></div><div class="pt"></div></div>
+      <div id="desk-p2" class="page"><div class="ph"></div><div class="pt"></div></div>
+      <div id="desk-p3" class="page"><div class="ph"></div><div class="pt"></div></div>
+      <div id="desk-p4" class="page"><div class="ph"></div><div class="pt"></div></div>
+      <div id="desk-p5" class="page"><div class="ph"></div><div class="pt"></div></div>
+      <div id="desk-p6" class="page"><div class="ph"></div><div class="pt"></div></div>
+      <div id="desk-p7" class="page"><div class="ph"></div><div class="pt"></div></div>
+    </div>
+    <div id="desk-cap" class="cap"><span id="desk-w0" class="w">Notes</span> <span id="desk-w1" class="w acc">piling</span> <span id="desk-w2" class="w acc">up?</span></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#desk-cam", { scale: 1 }, { scale: 1.14, duration: 2.5, ease: "none" }, 0);
+    tl.fromTo("#desk-p0", { x: -40, y: 30, rotation: -9 }, { x: -40, y: 30, rotation: -9, duration: 0.01 }, 0);
+    tl.fromTo("#desk-p1", { x: 35, y: -10, rotation: 7 }, { x: 35, y: -10, rotation: 7, duration: 0.01 }, 0);
+    tl.fromTo("#desk-p2", { x: -10, y: 15, rotation: -2 }, { x: -10, y: 15, rotation: -2, duration: 0.01 }, 0);
+    tl.fromTo("#desk-p3", { x: 180, y: -1500, rotation: 40 }, { x: 60, y: -40, rotation: 13, duration: 0.42, ease: "power3.out" }, 0.15);
+    tl.fromTo("#desk-p4", { x: -210, y: -1500, rotation: -50 }, { x: -70, y: 20, rotation: -15, duration: 0.42, ease: "power3.out" }, 0.5);
+    tl.fromTo("#desk-p5", { x: 60, y: -1500, rotation: 30 }, { x: 20, y: -25, rotation: 4, duration: 0.42, ease: "power3.out" }, 0.85);
+    tl.fromTo("#desk-p6", { x: -90, y: -1500, rotation: -35 }, { x: -30, y: 0, rotation: -7, duration: 0.42, ease: "power3.out" }, 1.2);
+    tl.fromTo("#desk-p7", { x: 135, y: -1500, rotation: 45 }, { x: 45, y: 10, rotation: 10, duration: 0.42, ease: "power3.out" }, 1.55);
+    tl.fromTo("#desk-cap .w", { opacity: 0.35, filter: "blur(4px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, ease: "power4.out", stagger: 0.08 }, 0);
+
+    window.__timelines["desk"] = tl;
+  </script>
+</template>

@@ -1,0 +1,78 @@
+<template>
+  <style>
+
+    #root { position: absolute; inset: 0; overflow: hidden; background: #0B0F19;
+      font-family: "Inter", sans-serif; color: #F8FAFC; }
+    .cap { position: absolute; left: 90px; right: 90px; top: 230px; z-index: 20; text-align: center;
+      font-weight: 700; font-size: 80px; line-height: 1.08; letter-spacing: -0.02em; color: #F8FAFC;
+      text-shadow: 0 4px 24px rgba(11, 15, 25, 0.8); }
+    .cap .w { display: inline-block; }
+    .cap .acc { color: #00E5FF; text-shadow: 0 0 28px rgba(0, 229, 255, 0.55); }
+
+    .stage { position: absolute; inset: 0; }
+    .phone-wrap { position: absolute; left: 246px; top: 560px; width: 588px; height: 1272px; }
+    .phone-glow { position: absolute; left: -260px; top: -160px; width: 1108px; height: 1592px;
+      background: radial-gradient(closest-side, rgba(0, 229, 255, 0.34), rgba(0, 229, 255, 0.10) 55%, rgba(0, 229, 255, 0) 100%); }
+    .phone { position: absolute; inset: 0; border-radius: 74px; background: #05070C; padding: 14px;
+      box-shadow: 0 0 0 2px #232B3D, 0 0 60px rgba(0, 229, 255, 0.25), 0 50px 90px rgba(0, 0, 0, 0.6); }
+    .screen { position: relative; width: 560px; height: 1244px; border-radius: 60px; overflow: hidden; background: #0B0F19; }
+    .screen .media { position: absolute; left: 0; top: 0; width: 560px; height: 1244px; object-fit: cover; }
+    .sb { position: absolute; left: 0; top: 0; width: 560px; height: 58px; z-index: 10; display: flex;
+      align-items: center; justify-content: space-between; padding: 6px 38px 0 46px; background: #0B0F19;
+      font-weight: 700; font-size: 22px; letter-spacing: -0.01em; color: #F8FAFC; }
+    .sb svg { display: block; }
+    .hl { position: absolute; z-index: 6; border: 3px solid #00E5FF; border-radius: 22px;
+      box-shadow: 0 0 22px rgba(0, 229, 255, 0.85), inset 0 0 14px rgba(0, 229, 255, 0.35); opacity: 0; }
+
+    .pan { position: absolute; left: 0; top: 0; width: 560px; height: 1244px; transform-origin: 50% 0%; }
+
+  </style>
+  <div id="root" data-composition-id="insights" data-width="1080" data-height="1920" data-duration="4.5">
+    <div id="insights-stage" class="stage">
+      <div id="insights-phone" class="phone-wrap">
+        <div class="phone-glow"></div>
+        <div class="phone"><div class="screen">
+          <video id="insights-ocr" class="clip media" src="assets/clips/D_review_save_ocr.mp4" muted playsinline
+            data-start="0" data-duration="1.5" data-media-start="12.6" data-playback-rate="4" data-track-index="1"></video>
+          <div id="insights-overview" class="clip pan" data-start="1.5" data-duration="3" data-track-index="2">
+            <div id="insights-pan" class="pan">
+              <img class="media" src="assets/stills/07_insights_overview.png" alt="" />
+              <div id="insights-chip0" class="hl" style="left: 27.1px; top: 289.5px; width: 269.9px; height: 48.4px"></div>
+              <div id="insights-chip1" class="hl" style="left: 300.9px; top: 289.5px; width: 125.7px; height: 48.4px; border-color: #C084FC; box-shadow: 0 0 22px rgba(192, 132, 252, 0.85)"></div>
+              <div id="insights-chip2" class="hl" style="left: 27.1px; top: 341.9px; width: 134.0px; height: 48.4px; border-color: #60A5FA; box-shadow: 0 0 22px rgba(96, 165, 250, 0.85)"></div>
+            </div>
+          </div>
+          <div class="sb" data-layout-ignore style="background: #0B0F19">
+            <span>9:41</span>
+            <svg width="112" height="22" viewBox="0 0 112 22" aria-hidden="true">
+              <rect x="0" y="14" width="5" height="7" rx="1.5" fill="#F8FAFC" />
+              <rect x="8" y="10" width="5" height="11" rx="1.5" fill="#F8FAFC" />
+              <rect x="16" y="6" width="5" height="15" rx="1.5" fill="#F8FAFC" />
+              <rect x="24" y="2" width="5" height="19" rx="1.5" fill="#F8FAFC" />
+              <path d="M38 8.5a16 16 0 0 1 22 0l-2.4 2.5a12.5 12.5 0 0 0-17.2 0z M42.5 13a9.5 9.5 0 0 1 13 0l-2.4 2.5a6 6 0 0 0-8.2 0z M46.6 17.4a3.6 3.6 0 0 1 4.8 0L49 20z" fill="#F8FAFC" />
+              <rect x="70" y="4" width="36" height="16" rx="4.5" fill="none" stroke="#F8FAFC" stroke-opacity="0.55" stroke-width="2" />
+              <rect x="73" y="7" width="30" height="10" rx="2.5" fill="#F8FAFC" />
+              <rect x="108" y="9" width="3" height="6" rx="1.2" fill="#F8FAFC" fill-opacity="0.55" />
+            </svg>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <div id="insights-cap" class="cap"><span id="insights-w0" class="w">Reads</span> <span id="insights-w1" class="w">it.</span> <span id="insights-w2" class="w acc">Understands</span> <span id="insights-w3" class="w acc">it.</span></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#insights-phone", { y: 0, rotation: 6 }, { y: 0, rotation: 6, duration: 0.01 }, 0);
+    tl.fromTo("#insights-w0, #insights-w1", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power4.out", stagger: 0.08 }, 0.1);
+    tl.fromTo("#insights-w2, #insights-w3", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power4.out", stagger: 0.08 }, 1.5);
+    tl.fromTo("#insights-pan", { opacity: 0.4, scale: 1.04 }, { opacity: 1, scale: 1, duration: 0.3, ease: "expo.out" }, 1.5);
+    tl.fromTo("#insights-chip0", { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.25, ease: "expo.out" }, 2.0);
+    tl.fromTo("#insights-chip1", { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.25, ease: "expo.out" }, 2.5);
+    tl.fromTo("#insights-chip2", { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.25, ease: "expo.out" }, 3.0);
+    tl.to("#insights-pan", { scale: 1.2, y: -250, duration: 0.9, ease: "power2.inOut" }, 3.3);
+    tl.to("#insights-stage", { y: -520, opacity: 0, duration: 0.3, ease: "power3.in" }, 4.2);
+    tl.to("#insights-cap", { y: -200, opacity: 0, duration: 0.25, ease: "power3.in" }, 4.2);
+
+    window.__timelines["insights"] = tl;
+  </script>
+</template>

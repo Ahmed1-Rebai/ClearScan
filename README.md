@@ -9,6 +9,17 @@
   [![Dart](https://img.shields.io/badge/Dart-3.11-0175C2?logo=dart&logoColor=white)](https://dart.dev)
   [![OCR](https://img.shields.io/badge/OCR-100%25%20On--Device-00E5FF)](https://developers.google.com/ml-kit/vision/text-recognition/v2)
   [![Privacy](https://img.shields.io/badge/Privacy-No%20Network%20Access-10B981)](#-privacy--security)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-C084FC)](LICENSE)
+  [![Release](https://img.shields.io/github/v/release/Ahmed1-Rebai/ClearScan?color=60A5FA)](https://github.com/Ahmed1-Rebai/ClearScan/releases/latest)
+
+  <p>
+    <a href="https://github.com/Ahmed1-Rebai/ClearScan/releases/latest"><strong>⬇️ Download the APK</strong></a> ·
+    <a href="#-demo">Demo</a> ·
+    <a href="#-key-features">Features</a> ·
+    <a href="#-build--installation-guide-android--ios">Build from source</a>
+  </p>
+
+  <img src="docs/media/demo.gif" alt="ClearScan demo: multi-page scan, cleanup, OCR insights and quoted answers" width="300" />
 </div>
 
 ---
@@ -18,6 +29,27 @@
 **ClearScan** is a mobile document scanner that turns photos of paper into clean, multi-page, searchable documents, and extracts their text and key fields, entirely on the phone. Image processing is pure Dart; text recognition uses Google ML Kit's bundled on-device model.
 
 **100% Offline. Zero Third-Party Services. Zero Cloud Uploads.**
+
+---
+
+## 🎬 Demo
+
+| Multi-page capture | Cleaned page | Insights | Ask (quoted answers) | Searchable PDF |
+| :---: | :---: | :---: | :---: | :---: |
+| <img src="docs/media/camera_multipage.jpg" width="160" alt="Multi-page camera" /> | <img src="docs/media/magic_clean_after.jpg" width="160" alt="Cleaned, straightened page" /> | <img src="docs/media/insights_overview.jpg" width="160" alt="Document insights" /> | <img src="docs/media/ask_answer_quoted.jpg" width="160" alt="Answer quoted from the document" /> | <img src="docs/media/share_pdf_contacts_blurred.jpg" width="160" alt="Share the searchable PDF" /> |
+
+The full 28-second promo video (with voiceover) is in [`promo/out/clearscan_promo.mp4`](promo/out/clearscan_promo.mp4).
+
+---
+
+## ⬇️ Download
+
+Grab the latest APK from **[Releases](https://github.com/Ahmed1-Rebai/ClearScan/releases/latest)**:
+
+- `ClearScan-arm64-v8a.apk`: most Android phones from the last few years
+- `ClearScan-universal.apk`: works everywhere (bigger download)
+
+Enable "Install unknown apps" for your browser or file manager, then open the APK. iOS builds need Xcode; see [iOS Setup](#-ios-setup--installation).
 
 ---
 
@@ -223,6 +255,15 @@ Your documents never leave your device. Image processing, text recognition (bund
 
 ---
 
+## 🤝 Contributing
+
+Issues and pull requests are welcome: bug reports with a sample photo (no personal data, please), new document types or labels for the extractor, translations, and UI polish. Run `flutter test` before opening a PR.
+
+If ClearScan is useful to you, a ⭐ helps other people find it.
+
+---
+
 ## 📄 License
-MIT License. Free and open source.
+
+[MIT](LICENSE) © 2026 Ahmed Rebai. Free and open source.
 
