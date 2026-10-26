@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="assets/vendor/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: #0B0F19;
+      }
+      #root {
+        width: 100%;
+        height: 100%;
+        font-family: "Inter", sans-serif;
+      }
+      #ground {
+        position: absolute;
+        inset: 0;
+        background: #0B0F19;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ClearScan promo: 9 scenes, 28 s, cuts on a 120 BPM grid (0.5 s). Silent; music goes on its own <audio> later. -->
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="28"
+      data-width="1080"
+      data-height="1920"
+    >
+      <div id="ground"></div>
+      <div
+        id="desk"
+        data-composition-id="desk"
+        data-composition-src="compositions/desk.html"
+        data-start="0"
+        data-duration="2.5"
+        data-track-index="1"
+        data-track-kind="graphics"
+        data-width="1080"
+        data-height="1920"
+      ></div>
+      <div
+        id="capture"
+        data-composition-id="capture"
+        data-composition-src="compositions/capture.html"
+        data-start="2.5"
+        data-duration="3.5"
+        data-track-index="2"
+        data-track-kind="graphics"
+        data-width="1080"
+        data-height="1920"
+      ></div>
+      <div
+        id="clean"
+        data-composition-id="clean"
+        data-composition-src="compositions/clean.html"
+        data-start="6.0"
+        data-duration="3.5"
+        data-track-index="3"
+        data-track-kind="graphics"
+        data-width="1080"
+        data-height="1920"
+      ></div>
+      <div
+        id="pages"
+        data-composition-id="pages"
+        data-composition-src="compositions/pages.html"
+        data-start="9.5"
+        data-duration="2.5"
+        data-track-index="4"
+        data-track-kind="graphics"
+        data-width="1080"
+        data-height="1920"
+      ></div>
+      <div
+        id="insights"
+        data-composition-id="insights"
+        data-composition-src="compositions/insights.html"
+        data-start="12.0"
+        data-duration="4.5"
+        data-track-index="5"
+        data-track-kind="graphics"
+        data-width="1080"
+        data-height="1920"
+      ></div>
+      <div
+        id="ask"
+        data-composition-id="ask"
+        data-composition-src="compositions/ask.html"
+        data-start="16.5"
+        data-duration="3.5"
+        data-track-index="6"
+        data-track-kind="graphics"
+        data-width="1080"
+        data-height="1920"
+      ></div>
+      <div
+        id="export"
+        data-composition-id="export"
+        data-composition-src="compositions/export.html"
+        data-start="20.0"
+        data-duration="2.5"
+        data-track-index="7"
+        data-track-kind="graphics"
+        data-width="1080"
+        data-height="1920"
+      ></div>
+      <div
+        id="privacy"
+        data-composition-id="privacy"
+        data-composition-src="compositions/privacy.html"
+        data-start="22.5"
+        data-duration="2.5"
+        data-track-index="8"
+        data-track-kind="graphics"
+        data-width="1080"
+        data-height="1920"
+      ></div>
+      <div
+        id="endcard"
+        data-composition-id="endcard"
+        data-composition-src="compositions/endcard.html"
+        data-start="25.0"
+        data-duration="3.0"
+        data-track-index="9"
+        data-track-kind="graphics"
+        data-width="1080"
+        data-height="1920"
+      ></div>
+    </div>
+    <script>
+      window.__timelines["main"] = gsap.timeline({ paused: true });
+    </script>
+  </body>
+</html>

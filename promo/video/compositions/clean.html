@@ -1,0 +1,62 @@
+<template>
+  <style>
+
+    #root { position: absolute; inset: 0; overflow: hidden; background: #0B0F19;
+      font-family: "Inter", sans-serif; color: #F8FAFC; }
+    .cap { position: absolute; left: 90px; right: 90px; top: 230px; z-index: 20; text-align: center;
+      font-weight: 700; font-size: 80px; line-height: 1.08; letter-spacing: -0.02em; color: #F8FAFC;
+      text-shadow: 0 4px 24px rgba(11, 15, 25, 0.8); }
+    .cap .w { display: inline-block; }
+    .cap .acc { color: #00E5FF; text-shadow: 0 0 28px rgba(0, 229, 255, 0.55); }
+
+    .full { position: absolute; inset: 0; overflow: hidden; }
+    .full img { position: absolute; left: 0; top: -250px; width: 1080px; height: 2400px; }
+    .scrim { position: absolute; left: 0; top: 0; width: 1080px; height: 640px; z-index: 15;
+      background: linear-gradient(to bottom, rgba(11, 15, 25, 0.92) 0%, rgba(11, 15, 25, 0.75) 55%, rgba(11, 15, 25, 0) 100%); }
+    .beam { position: absolute; left: -10px; top: 0; width: 18px; height: 1920px; z-index: 12; background: #E6FDFF;
+      box-shadow: 0 0 30px 10px rgba(0, 229, 255, 0.9), 0 0 90px 40px rgba(0, 229, 255, 0.45); }
+    .ring { position: absolute; width: 88px; height: 88px; border-radius: 50%; border: 5px solid #00E5FF;
+      box-shadow: 0 0 26px rgba(0, 229, 255, 0.95); opacity: 0; }
+    .exitwipe { position: absolute; inset: 0; z-index: 30; background: #0B0F19; }
+    #clean-crop { top: -110px; }
+    #clean-cap { font-size: 68px; left: 40px; right: 40px; }
+
+  </style>
+  <div id="root" data-composition-id="clean" data-width="1080" data-height="1920" data-duration="3.5">
+    <div id="clean-cam" class="full">
+      <div class="full"><img id="clean-before" src="assets/stills/02_raw_processing_before.png" alt="" /></div>
+      <div id="clean-afterwrap" class="full"><img id="clean-after" src="assets/stills/03_magic_clean_after.png" alt="" /></div>
+      <div id="clean-insert" class="full">
+        <img id="clean-crop" src="assets/stills/04_adjust_crop_corners.png" alt="" />
+        <div id="clean-h0" class="ring" style="left: 4px; top: 410px"></div>
+        <div id="clean-h1" class="ring" style="left: 988px; top: 410px"></div>
+        <div id="clean-h2" class="ring" style="left: 4px; top: 1730px"></div>
+        <div id="clean-h3" class="ring" style="left: 988px; top: 1730px"></div>
+      </div>
+    </div>
+    <div id="clean-beam" class="beam"></div>
+    <div class="scrim"></div>
+    <div id="clean-cap" class="cap"><span id="clean-w0" class="w acc">Straightened.</span> <span id="clean-w1" class="w">Cleaned.</span> <span id="clean-w2" class="w">Sharp.</span></div>
+    <div id="clean-exit" class="exitwipe"></div>
+    <div id="clean-beam2" class="beam"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#clean-cam", { scale: 1.25, filter: "blur(12px)" }, { scale: 1, filter: "blur(0px)", duration: 0.4, ease: "expo.out" }, 0);
+    tl.fromTo("#clean-afterwrap", { clipPath: "inset(0px 100% 0px 0px)" }, { clipPath: "inset(0px 0% 0px 0px)", duration: 0.9, ease: "power2.inOut" }, 0.5);
+    tl.fromTo("#clean-beam", { x: 0, opacity: 1 }, { x: 1090, opacity: 1, duration: 0.9, ease: "power2.inOut" }, 0.5);
+    tl.to("#clean-beam", { opacity: 0, duration: 0.1 }, 1.4);
+    tl.fromTo("#clean-w0", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power4.out" }, 0.5);
+    tl.fromTo("#clean-w1", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power4.out" }, 1.0);
+    tl.fromTo("#clean-w2", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power4.out" }, 1.5);
+    tl.fromTo("#clean-insert", { opacity: 0, scale: 1.06 }, { opacity: 1, scale: 1, duration: 0.2, ease: "expo.out" }, 2.2);
+    tl.fromTo("#clean-insert .ring", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.25, ease: "expo.out", stagger: 0.05 }, 2.3);
+    tl.to("#clean-insert .ring", { scale: 1.35, opacity: 0.35, duration: 0.3, ease: "power2.out" }, 2.6);
+    tl.to("#clean-insert .ring", { scale: 1, opacity: 1, duration: 0.25, ease: "power2.out" }, 2.9);
+    tl.fromTo("#clean-exit", { clipPath: "inset(0px 100% 0px 0px)" }, { clipPath: "inset(0px 0% 0px 0px)", duration: 0.45, ease: "power3.in" }, 3.0);
+    tl.fromTo("#clean-beam2", { x: 0, opacity: 0 }, { x: 1090, opacity: 1, duration: 0.45, ease: "power3.in" }, 3.0);
+    tl.to("#clean-cap", { opacity: 0, duration: 0.15 }, 3.25);
+
+    window.__timelines["clean"] = tl;
+  </script>
+</template>

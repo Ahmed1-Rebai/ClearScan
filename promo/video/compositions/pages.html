@@ -1,0 +1,78 @@
+<template>
+  <style>
+
+    #root { position: absolute; inset: 0; overflow: hidden; background: #0B0F19;
+      font-family: "Inter", sans-serif; color: #F8FAFC; }
+    .cap { position: absolute; left: 90px; right: 90px; top: 230px; z-index: 20; text-align: center;
+      font-weight: 700; font-size: 80px; line-height: 1.08; letter-spacing: -0.02em; color: #F8FAFC;
+      text-shadow: 0 4px 24px rgba(11, 15, 25, 0.8); }
+    .cap .w { display: inline-block; }
+    .cap .acc { color: #00E5FF; text-shadow: 0 0 28px rgba(0, 229, 255, 0.55); }
+
+    .stage { position: absolute; inset: 0; }
+    .phone-wrap { position: absolute; left: 246px; top: 560px; width: 588px; height: 1272px; }
+    .phone-glow { position: absolute; left: -260px; top: -160px; width: 1108px; height: 1592px;
+      background: radial-gradient(closest-side, rgba(0, 229, 255, 0.34), rgba(0, 229, 255, 0.10) 55%, rgba(0, 229, 255, 0) 100%); }
+    .phone { position: absolute; inset: 0; border-radius: 74px; background: #05070C; padding: 14px;
+      box-shadow: 0 0 0 2px #232B3D, 0 0 60px rgba(0, 229, 255, 0.25), 0 50px 90px rgba(0, 0, 0, 0.6); }
+    .screen { position: relative; width: 560px; height: 1244px; border-radius: 60px; overflow: hidden; background: #0B0F19; }
+    .screen .media { position: absolute; left: 0; top: 0; width: 560px; height: 1244px; object-fit: cover; }
+    .sb { position: absolute; left: 0; top: 0; width: 560px; height: 58px; z-index: 10; display: flex;
+      align-items: center; justify-content: space-between; padding: 6px 38px 0 46px; background: #0B0F19;
+      font-weight: 700; font-size: 22px; letter-spacing: -0.01em; color: #F8FAFC; }
+    .sb svg { display: block; }
+    .hl { position: absolute; z-index: 6; border: 3px solid #00E5FF; border-radius: 22px;
+      box-shadow: 0 0 22px rgba(0, 229, 255, 0.85), inset 0 0 14px rgba(0, 229, 255, 0.35); opacity: 0; }
+
+    .card { position: absolute; left: 390px; top: 659px; width: 300px; height: 422px; z-index: 18;
+      border-radius: 14px; background-image: url("assets/stills/05_review_3_pages.png");
+      background-size: 1790.1px 3977.9px; background-repeat: no-repeat;
+      box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.55), 0 0 36px rgba(0, 229, 255, 0.35), 0 30px 60px rgba(0, 0, 0, 0.55); opacity: 0; }
+
+  </style>
+  <div id="root" data-composition-id="pages" data-width="1080" data-height="1920" data-duration="2.5">
+    <div id="pages-stage" class="stage">
+      <div id="pages-phone" class="phone-wrap">
+        <div class="phone-glow"></div>
+        <div class="phone"><div class="screen">
+          <img id="pages-review" class="media" src="assets/stills/05_review_3_pages.png" alt="" />
+          <img id="pages-ocr" class="media" src="assets/stills/06_ocr_recognizing.png" alt="" />
+          <div class="sb" data-layout-ignore style="background: #0B0F19">
+            <span>9:41</span>
+            <svg width="112" height="22" viewBox="0 0 112 22" aria-hidden="true">
+              <rect x="0" y="14" width="5" height="7" rx="1.5" fill="#F8FAFC" />
+              <rect x="8" y="10" width="5" height="11" rx="1.5" fill="#F8FAFC" />
+              <rect x="16" y="6" width="5" height="15" rx="1.5" fill="#F8FAFC" />
+              <rect x="24" y="2" width="5" height="19" rx="1.5" fill="#F8FAFC" />
+              <path d="M38 8.5a16 16 0 0 1 22 0l-2.4 2.5a12.5 12.5 0 0 0-17.2 0z M42.5 13a9.5 9.5 0 0 1 13 0l-2.4 2.5a6 6 0 0 0-8.2 0z M46.6 17.4a3.6 3.6 0 0 1 4.8 0L49 20z" fill="#F8FAFC" />
+              <rect x="70" y="4" width="36" height="16" rx="4.5" fill="none" stroke="#F8FAFC" stroke-opacity="0.55" stroke-width="2" />
+              <rect x="73" y="7" width="30" height="10" rx="2.5" fill="#F8FAFC" />
+              <rect x="108" y="9" width="3" height="6" rx="1.2" fill="#F8FAFC" fill-opacity="0.55" />
+            </svg>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <div id="pages-c0" class="card" style="background-position: -59.7px -3430.9px"></div>
+    <div id="pages-c1" class="card" style="background-position: -406.1px -3430.9px"></div>
+    <div id="pages-c2" class="card" style="background-position: -749.2px -3430.9px"></div>
+    <div id="pages-cap" class="cap"><span id="pages-w0" class="w">3</span> <span id="pages-w1" class="w">pages</span> <span id="pages-w2" class="w acc">→</span> <span id="pages-w3" class="w acc">1</span> <span id="pages-w4" class="w acc">document</span></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#pages-phone", { y: 60, rotation: 6, opacity: 0 }, { y: 0, rotation: 6, opacity: 1, duration: 0.35, ease: "expo.out" }, 0);
+    tl.fromTo("#pages-ocr", { opacity: 0 }, { opacity: 1, duration: 0.15, ease: "none" }, 2.05);
+    tl.fromTo("#pages-cap .w", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power4.out", stagger: 0.08 }, 0.05);
+    tl.fromTo("#pages-c0", { x: -267, y: 818, rotation: 6, scale: 0.31, opacity: 0 }, { x: -240, y: 10, rotation: -8, scale: 1, opacity: 1, duration: 0.55, ease: "expo.out" }, 0.30);
+    tl.to("#pages-c0", { x: -12, y: 10, rotation: -4, duration: 0.4, ease: "power2.inOut" }, 1.2);
+    tl.fromTo("#pages-c1", { x: -159, y: 829, rotation: 6, scale: 0.31, opacity: 0 }, { x: 0, y: -20, rotation: 0, scale: 1, opacity: 1, duration: 0.55, ease: "expo.out" }, 0.38);
+    tl.to("#pages-c1", { x: 12, y: 2, rotation: 3, duration: 0.4, ease: "power2.inOut" }, 1.2);
+    tl.fromTo("#pages-c2", { x: -52, y: 841, rotation: 6, scale: 0.31, opacity: 0 }, { x: 240, y: 10, rotation: 8, scale: 1, opacity: 1, duration: 0.55, ease: "expo.out" }, 0.46);
+    tl.to("#pages-c2", { x: 0, y: 0, rotation: 0, duration: 0.4, ease: "power2.inOut" }, 1.2);
+    tl.to("#root .card", { x: 0, y: 330, scale: 0.18, rotation: 6, opacity: 0, duration: 0.45, ease: "power3.in", stagger: 0.04 }, 1.8);
+    tl.to("#pages-phone", { scale: 1.03, duration: 0.15, ease: "power2.out" }, 2.2);
+    tl.to("#pages-phone", { scale: 1, duration: 0.15, ease: "power2.in" }, 2.35);
+
+    window.__timelines["pages"] = tl;
+  </script>
+</template>
