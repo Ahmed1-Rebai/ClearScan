@@ -31,7 +31,7 @@
     </style>
   </head>
   <body>
-    <!-- ClearScan promo: 9 scenes, 28 s, cuts on a 120 BPM grid (0.5 s). Silent; music goes on its own <audio> later. -->
+    <!-- ClearScan promo: 9 scenes, 28 s, cuts on a 120 BPM grid (0.5 s). Voiceover + SFX; music can go on its own <audio> later. -->
     <div
       id="root"
       data-composition-id="main"
@@ -140,6 +140,32 @@
         data-width="1080"
         data-height="1920"
       ></div>
+      <!-- Voiceover (Kokoro af_heart, one line per scene) and SFX (Pixabay licence, see assets/sfx/CREDITS.md) -->
+      <audio id="vo1" class="clip" src="assets/voice/vo1.wav" data-start="0.15" data-duration="1.13" data-track-index="20" data-volume="1"></audio>
+      <audio id="vo2" class="clip" src="assets/voice/vo2.wav" data-start="2.6" data-duration="1.72" data-track-index="20" data-volume="1"></audio>
+      <audio id="vo3" class="clip" src="assets/voice/vo3.wav" data-start="6.2" data-duration="2.26" data-track-index="20" data-volume="1"></audio>
+      <audio id="vo4" class="clip" src="assets/voice/vo4.wav" data-start="9.6" data-duration="2.26" data-track-index="20" data-volume="1"></audio>
+      <audio id="vo5" class="clip" src="assets/voice/vo5.wav" data-start="12.2" data-duration="2.11" data-track-index="20" data-volume="1"></audio>
+      <audio id="vo6" class="clip" src="assets/voice/vo6.wav" data-start="16.6" data-duration="2.88" data-track-index="20" data-volume="1"></audio>
+      <audio id="vo7" class="clip" src="assets/voice/vo7.wav" data-start="20.1" data-duration="1.79" data-track-index="20" data-volume="1"></audio>
+      <audio id="vo8" class="clip" src="assets/voice/vo8.wav" data-start="22.6" data-duration="1.74" data-track-index="20" data-volume="1"></audio>
+      <audio id="vo9" class="clip" src="assets/voice/vo9.wav" data-start="25.2" data-duration="2.49" data-track-index="20" data-volume="1"></audio>
+      <audio id="sfx-cut" class="clip" src="assets/sfx/whoosh-short.mp3" data-start="2.45" data-duration="0.57" data-track-index="21" data-volume="0.3"></audio>
+      <audio id="sfx-shutter1" class="clip" src="assets/sfx/click.mp3" data-start="2.62" data-duration="0.36" data-track-index="22" data-volume="0.35"></audio>
+      <audio id="sfx-shutter2" class="clip" src="assets/sfx/click.mp3" data-start="4.62" data-duration="0.36" data-track-index="21" data-volume="0.35"></audio>
+      <audio id="sfx-shutter3" class="clip" src="assets/sfx/click.mp3" data-start="5.87" data-duration="0.36" data-track-index="22" data-volume="0.35"></audio>
+      <audio id="sfx-push" class="clip" src="assets/sfx/whoosh.mp3" data-start="5.75" data-duration="0.57" data-track-index="21" data-volume="0.35"></audio>
+      <audio id="sfx-wipe" class="clip" src="assets/sfx/whoosh-short.mp3" data-start="6.55" data-duration="0.57" data-track-index="22" data-volume="0.25"></audio>
+      <audio id="sfx-wipe-out" class="clip" src="assets/sfx/whoosh-short.mp3" data-start="9.1" data-duration="0.57" data-track-index="21" data-volume="0.25"></audio>
+      <audio id="sfx-lift" class="clip" src="assets/sfx/pop.mp3" data-start="9.8" data-duration="0.71" data-track-index="22" data-volume="0.3"></audio>
+      <audio id="sfx-chip1" class="clip" src="assets/sfx/pop.mp3" data-start="14.0" data-duration="0.71" data-track-index="21" data-volume="0.25"></audio>
+      <audio id="sfx-chip2" class="clip" src="assets/sfx/pop.mp3" data-start="14.5" data-duration="0.71" data-track-index="22" data-volume="0.25"></audio>
+      <audio id="sfx-chip3" class="clip" src="assets/sfx/pop.mp3" data-start="15.0" data-duration="0.71" data-track-index="21" data-volume="0.25"></audio>
+      <audio id="sfx-typing" class="clip" src="assets/sfx/typing.mp3" data-start="16.55" data-duration="1.54" data-track-index="22" data-volume="0.18"></audio>
+      <audio id="sfx-answer" class="clip" src="assets/sfx/chime.mp3" data-start="18.9" data-duration="2.54" data-track-index="21" data-volume="0.22"></audio>
+      <audio id="sfx-whip" class="clip" src="assets/sfx/whoosh.mp3" data-start="22.05" data-duration="0.57" data-track-index="22" data-volume="0.35"></audio>
+      <audio id="sfx-bass" class="clip" src="assets/sfx/impact-bass-1.mp3" data-start="22.5" data-duration="2.11" data-track-index="21" data-volume="0.4"></audio>
+      <audio id="sfx-shimmer" class="clip" src="assets/sfx/sparkle.mp3" data-start="25.55" data-duration="1.8" data-track-index="22" data-volume="0.3"></audio>
     </div>
     <script>
       window.__timelines["main"] = gsap.timeline({ paused: true });

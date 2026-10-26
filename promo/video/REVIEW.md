@@ -2,7 +2,33 @@
 
 Source of truth: `../SCRIPT.md` and `../BRIEF.md`. 28 s, 1080×1920, 30 fps, cuts on a 120 BPM grid
 (scene starts 0, 2.5, 6, 9.5, 12, 16.5, 20, 22.5, 25 s). Rendered to `../out/clearscan_promo.mp4`
-with a silent stereo AAC track so music can be laid in later.
+with voiceover + SFX, mixed to -14 LUFS integrated / -1 dBTP (social-platform loudness).
+
+## Voiceover
+Kokoro-82M, voice `af_heart` (on-device TTS, `npx hyperframes tts`), one line per scene in
+`assets/voice/vo1..vo9.wav` (high-pass, light EQ/compression, same gain on every line), placed on
+track 20 in `index.html`:
+
+| Line | Start | Text |
+|---|---|---|
+| vo1 | 0.15 | Notes piling up? |
+| vo2 | 2.6 | Scan every page in one go. |
+| vo3 | 6.2 | ClearScan straightens and cleans each one. |
+| vo4 | 9.6 | Any number of pages. One document. |
+| vo5 | 12.2 | It reads the text, and understands it. |
+| vo6 | 16.6 | Ask anything. It answers, quoting the document. |
+| vo7 | 20.1 | Export a searchable PDF. |
+| vo8 | 22.6 | And everything stays on your phone. |
+| vo9 | 25.2 | ClearScan. Scan. Read. Private. |
+
+To swap in a studio voice (HeyGen / ElevenLabs), replace the nine wav files with takes of the same
+lines (each must fit before the next scene) and re-render; no composition change is needed.
+
+## Sound effects
+Bundled HyperFrames library (Pixabay Content License, free commercial use, see `assets/sfx/CREDITS.md`):
+shutter clicks on the three captures, whooshes on the push-through / wipes / whip pan, pops on the cards
+and insight chips, typing under the question, a chime on the quoted answer, a bass hit on the privacy line
+and a sparkle on the logo. Tracks 21–22, volumes 0.18–0.4 so they sit under the voice. No music.
 
 ## Scenes → assets
 | # | File | Assets |
@@ -25,16 +51,19 @@ with a silent stereo AAC track so music can be laid in later.
 - Share screen is only the pre-anonymised `10_share_pdf_contacts_blurred.png`.
 
 ## Deviations from the script
+- Scene 4 caption is generic: "N pages → 1 document", the number ticking 1 → 2 → 3 → N as the
+  three real thumbnails stack into one card.
 - Scene 2 caption shortened to "Scan every page at once" (the brief caps captions at 5 words).
 - Logo comes from `promo/stills/12_logo.png` (transparent navy mark), placed on a white rounded tile
   so it reads on the navy ground.
 - GSAP is vendored in `assets/vendor/` (the render sandbox has no CDN access).
 
 ## Check
-`npx hyperframes check`: ok. Remaining warnings are deliberate: silent film (brief), status-bar "9:41"
+`npx hyperframes check`: ok. Remaining warnings are deliberate: the 1 → 2 → 3 counter ticks are brief by design, status-bar "9:41"
 below the 28 px type floor (marked as texture), end-card lines shorter than the closing-line hold
 because the script fixes the end card at 3 s with a fade to black.
 
 ## Regenerate
-`npx hyperframes render --video-bitrate 12M --fps 30 --output ../out/render_raw.mp4`, then
-`ffmpeg -i ../out/render_raw.mp4 -f lavfi -i anullsrc=r=48000:cl=stereo -map 0:v -map 1:a -c:v copy -c:a aac -t 28 -movflags +faststart ../out/clearscan_promo.mp4`.
+`npx hyperframes render --video-bitrate 12M --fps 30 --output ../out/render_raw.mp4`, then normalise the
+mix without re-encoding the picture (two-pass `loudnorm`, I=-14, TP=-1, LRA=9, `linear=true`):
+`ffmpeg -i ../out/render_raw.mp4 -map 0:v -map 0:a -c:v copy -af "loudnorm=I=-14:TP=-1.0:LRA=9:<measured values>:linear=true" -c:a aac -b:a 192k -movflags +faststart ../out/clearscan_promo.mp4`.

@@ -24,6 +24,9 @@
     .hl { position: absolute; z-index: 6; border: 3px solid #00E5FF; border-radius: 22px;
       box-shadow: 0 0 22px rgba(0, 229, 255, 0.85), inset 0 0 14px rgba(0, 229, 255, 0.35); opacity: 0; }
 
+    .cap .roll { height: 1.08em; width: 0.78em; overflow: hidden; vertical-align: top; text-align: center; }
+    .cap .strip { display: block; }
+    .cap .strip span { display: block; height: 1.08em; line-height: 1.08em; }
     .card { position: absolute; left: 390px; top: 659px; width: 300px; height: 422px; z-index: 18;
       border-radius: 14px; background-image: url("assets/stills/05_review_3_pages.png");
       background-size: 1790.1px 3977.9px; background-repeat: no-repeat;
@@ -56,13 +59,16 @@
     <div id="pages-c0" class="card" style="background-position: -59.7px -3430.9px"></div>
     <div id="pages-c1" class="card" style="background-position: -406.1px -3430.9px"></div>
     <div id="pages-c2" class="card" style="background-position: -749.2px -3430.9px"></div>
-    <div id="pages-cap" class="cap"><span id="pages-w0" class="w">3</span> <span id="pages-w1" class="w">pages</span> <span id="pages-w2" class="w acc">→</span> <span id="pages-w3" class="w acc">1</span> <span id="pages-w4" class="w acc">document</span></div>
+    <div id="pages-cap" class="cap"><span id="pages-w0" class="w roll"><span id="pages-strip" class="strip"><span>1</span><span>2</span><span>3</span><span class="acc">N</span></span></span> <span id="pages-w1" class="w">pages</span> <span id="pages-w2" class="w acc">→</span> <span id="pages-w3" class="w acc">1</span> <span id="pages-w4" class="w acc">document</span></div>
   </div>
   <script>
     const tl = gsap.timeline({ paused: true });
     tl.fromTo("#pages-phone", { y: 60, rotation: 6, opacity: 0 }, { y: 0, rotation: 6, opacity: 1, duration: 0.35, ease: "expo.out" }, 0);
     tl.fromTo("#pages-ocr", { opacity: 0 }, { opacity: 1, duration: 0.15, ease: "none" }, 2.05);
     tl.fromTo("#pages-cap .w", { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power4.out", stagger: 0.08 }, 0.05);
+    tl.fromTo("#pages-strip", { y: 0 }, { y: -86.4, duration: 0.14, ease: "power3.out" }, 0.45);
+    tl.to("#pages-strip", { y: -172.8, duration: 0.14, ease: "power3.out" }, 0.75);
+    tl.to("#pages-strip", { y: -259.2, duration: 0.16, ease: "power3.out" }, 1.2);
     tl.fromTo("#pages-c0", { x: -267, y: 818, rotation: 6, scale: 0.31, opacity: 0 }, { x: -240, y: 10, rotation: -8, scale: 1, opacity: 1, duration: 0.55, ease: "expo.out" }, 0.30);
     tl.to("#pages-c0", { x: -12, y: 10, rotation: -4, duration: 0.4, ease: "power2.inOut" }, 1.2);
     tl.fromTo("#pages-c1", { x: -159, y: 829, rotation: 6, scale: 0.31, opacity: 0 }, { x: 0, y: -20, rotation: 0, scale: 1, opacity: 1, duration: 0.55, ease: "expo.out" }, 0.38);
